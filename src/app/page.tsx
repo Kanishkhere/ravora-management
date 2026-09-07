@@ -6,7 +6,8 @@ import { BrandMark } from "@/components/brand-mark";
 import { DateNavigation } from "@/components/date-navigation";
 import { todayInIndia } from "@/lib/format";
 import { format, isValid, parseISO } from "date-fns";
-import { CalendarDays, IndianRupee, LogOut, TriangleAlert } from "lucide-react";
+import { CalendarDays, IndianRupee, List, LogOut, TriangleAlert } from "lucide-react";
+import Link from "next/link";
 
 type HomeProps = {
   searchParams: Promise<{ date?: string | string[] }>;
@@ -88,7 +89,13 @@ export default async function Home({ searchParams }: HomeProps) {
               {format(selectedDate, "MMMM d, yyyy")}
             </p>
           </div>
-          <DateNavigation date={date} />
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+            <DateNavigation date={date} />
+            <Link href="/appointments" className="button-secondary h-11 w-full justify-center sm:w-auto">
+              <List aria-hidden="true" className="size-4" />
+              List all appointments
+            </Link>
+          </div>
         </div>
 
         <section

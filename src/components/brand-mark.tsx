@@ -17,9 +17,10 @@ export function BrandMark({
         <Image
           src="/images/ravora-logo-mark.png"
           alt=""
-          fill
+          width={44}
+          height={44}
           priority={priority}
-          className="object-cover"
+          className="size-full object-contain"
           sizes="44px"
         />
       </div>

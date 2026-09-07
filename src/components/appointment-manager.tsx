@@ -7,6 +7,7 @@ import {
   toggleAppointmentComplete,
 } from "@/actions/appointments";
 import {
+  CalendarDays,
   CalendarPlus,
   CheckCircle2,
   CircleCheck,
@@ -17,8 +18,10 @@ import {
   TriangleAlert,
   X,
 } from "lucide-react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FormEvent, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { formatIndiaDate } from "@/lib/format";
 
 type Conflict = {
   id: string;
@@ -31,6 +34,8 @@ type Conflict = {
 type AppointmentManagerProps = {
   appointments: Appointment[];
   date: string;
+  groupByDate?: boolean;
+  allowCreate?: boolean;
 };
 
 function FieldError({
@@ -81,9 +86,26 @@ function fieldValue(
   return value == null ? fallback : String(value);
 }
 
+function groupAppointmentsByDate(appointments: Appointment[]) {
+  const groups = new Map<string, Appointment[]>();
+
+  for (const appointment of appointments) {
+    const existing = groups.get(appointment.date);
+    if (existing) {
+      existing.push(appointment);
+    } else {
+      groups.set(appointment.date, [appointment]);
+    }
+  }
+
+  return groups;
+}
+
 export function AppointmentManager({
   appointments,
   date,
+  groupByDate = false,
+  allowCreate = true,
 }: AppointmentManagerProps) {
   const router = useRouter();
   const firstFieldRef = useRef<HTMLInputElement>(null);
@@ -241,6 +263,151 @@ export function AppointmentManager({
     }
   }
 
+  function renderAppointmentCard(appointment: Appointment) {
+    const isCompleted = appointment.isCompleted;
+    const appointmentId = fieldValue(appointment, "id");
+    const isTogglingComplete = completingId === appointmentId;
+
+    return (
+      <article
+        key={appointmentId}
+        className={`group grid gap-4 rounded-2xl border p-4 shadow-[0_10px_35px_rgb(70_55_30/4%)] transition sm:grid-cols-[7rem_minmax(0,1fr)_auto] sm:items-center sm:p-5 ${
+          isCompleted
+            ? "border-emerald-200 bg-emerald-50 shadow-[0_10px_35px_rgb(16_185_129/8%)]"
+            : "border-line bg-paper hover:border-gold/45"
+        }`}
+      >
+        <div
+          className={`flex items-center gap-2 text-sm font-bold sm:block ${
+            isCompleted ? "text-emerald-800" : "text-gold-deep"
+          }`}
+        >
+          <p>{formatTime(fieldValue(appointment, "startTime"))}</p>
+          <span className="text-muted sm:hidden">—</span>
+          <p className="mt-1 text-xs font-medium text-muted">
+            {formatTime(fieldValue(appointment, "endTime"))}
+          </p>
+        </div>
+
+        <div
+          className={`min-w-0 sm:border-l sm:pl-5 ${
+            isCompleted ? "border-emerald-200" : "border-line"
+          }`}
+        >
+          <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+            <h2
+              className={`font-display text-xl font-semibold leading-tight sm:text-2xl ${
+                isCompleted
+                  ? "text-muted line-through decoration-emerald-700/40"
+                  : ""
+              }`}
+            >
+              {fieldValue(appointment, "clientName")}
+            </h2>
+            <span className="rounded-full bg-gold/10 px-2.5 py-1 text-[0.68rem] font-bold uppercase tracking-wider text-gold-deep">
+              {fieldValue(appointment, "service")}
+            </span>
+            {isCompleted && (
+              <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-[0.68rem] font-bold uppercase tracking-wider text-emerald-900">
+                Done
+              </span>
+            )}
+          </div>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {fieldValue(appointment, "phone") && (
+              <span className="flex items-center gap-1.5 rounded-full border border-line bg-paper/80 px-2.5 py-1 text-xs text-muted">
+                <Phone aria-hidden="true" className="size-3.5" />
+                {fieldValue(appointment, "phone")}
+              </span>
+            )}
+            <span className="rounded-xl border border-line bg-paper/80 px-3 py-2 text-xs text-muted">
+              <span className="block font-bold uppercase tracking-wider text-charcoal/70">
+                Booking
+              </span>
+              <span className="mt-1 flex items-center gap-1.5">
+                <IndianRupee aria-hidden="true" className="size-3.5" />
+                {formatMoney(fieldValue(appointment, "bookingAmount"))}
+                <span className="text-muted">·</span>
+                {formatPaymentMode(
+                  fieldValue(appointment, "bookingPaymentMode", "cash"),
+                )}
+              </span>
+            </span>
+            <span className="rounded-xl border border-line bg-paper/80 px-3 py-2 text-xs text-muted">
+              <span className="block font-bold uppercase tracking-wider text-charcoal/70">
+                Pending
+              </span>
+              <span className="mt-1 flex items-center gap-1.5">
+                <IndianRupee aria-hidden="true" className="size-3.5" />
+                {formatMoney(fieldValue(appointment, "pendingAmount"))}
+                <span className="text-muted">·</span>
+                {formatPaymentMode(
+                  fieldValue(appointment, "pendingPaymentMode", "cash"),
+                )}
+              </span>
+            </span>
+          </div>
+          {fieldValue(appointment, "description") && (
+            <p
+              className={`mt-3 text-sm leading-6 text-muted ${
+                groupByDate ? "" : "line-clamp-2"
+              }`}
+            >
+              {fieldValue(appointment, "description")}
+            </p>
+          )}
+        </div>
+
+        <div
+          className={`flex items-center justify-end gap-1 border-t pt-3 sm:border-0 sm:justify-start sm:pt-0 ${
+            isCompleted ? "border-emerald-200" : "border-line"
+          }`}
+        >
+          <button
+            type="button"
+            className={`rounded-full p-2.5 transition disabled:opacity-50 ${
+              isCompleted
+                ? "bg-white/80 text-emerald-800 hover:bg-white"
+                : "text-muted hover:bg-emerald-50 hover:text-emerald-800"
+            }`}
+            onClick={() => handleToggleComplete(appointment)}
+            disabled={isTogglingComplete}
+            aria-label={
+              isCompleted
+                ? `Mark ${fieldValue(appointment, "clientName")}'s appointment as incomplete`
+                : `Mark ${fieldValue(appointment, "clientName")}'s appointment as done`
+            }
+          >
+            {isCompleted ? (
+              <CheckCircle2 aria-hidden="true" className="size-4" />
+            ) : (
+              <CircleCheck aria-hidden="true" className="size-4" />
+            )}
+          </button>
+          <button
+            type="button"
+            className="rounded-full p-2.5 text-muted transition hover:bg-cream hover:text-charcoal"
+            onClick={() => openEdit(appointment)}
+            aria-label={`Edit ${fieldValue(appointment, "clientName")}'s appointment`}
+          >
+            <Edit3 aria-hidden="true" className="size-4" />
+          </button>
+          <button
+            type="button"
+            className="rounded-full p-2.5 text-muted transition hover:bg-red-50 hover:text-danger"
+            onClick={() => {
+              setError("");
+              setDeleting(appointment);
+            }}
+            aria-label={`Delete ${fieldValue(appointment, "clientName")}'s appointment`}
+          >
+            <Trash2 aria-hidden="true" className="size-4" />
+          </button>
+        </div>
+      </article>
+    );
+  }
+
   return (
     <>
       <span
@@ -248,186 +415,100 @@ export function AppointmentManager({
         data-ready={ready ? "true" : "false"}
         aria-hidden="true"
       />
-      <button
-        type="button"
-        className="button-primary w-full sm:w-auto"
-        onClick={openCreate}
-      >
-        <CalendarPlus aria-hidden="true" className="size-4" />
-        New appointment
-      </button>
+      {allowCreate && (
+        <button
+          type="button"
+          className="button-primary w-full sm:w-auto"
+          onClick={openCreate}
+        >
+          <CalendarPlus aria-hidden="true" className="size-4" />
+          New appointment
+        </button>
+      )}
 
       {error && !dialogOpen && !deleting && (
         <p
           role="alert"
-          className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-danger"
+          className={`rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-danger ${
+            allowCreate ? "mt-4" : ""
+          }`}
         >
           {error}
         </p>
       )}
 
-      <div className="mt-6 space-y-3">
+      <div className={allowCreate ? "mt-6 space-y-3" : "space-y-3"}>
         {appointments.length === 0 ? (
           <div className="rounded-3xl border border-dashed border-line bg-paper/70 px-6 py-16 text-center">
             <div className="mx-auto flex size-12 items-center justify-center rounded-full bg-gold/10 text-gold-deep">
-              <CalendarPlus aria-hidden="true" className="size-5" />
+              {groupByDate ? (
+                <CalendarDays aria-hidden="true" className="size-5" />
+              ) : (
+                <CalendarPlus aria-hidden="true" className="size-5" />
+              )}
             </div>
             <h2 className="mt-4 font-display text-2xl font-semibold">
-              A clear day
+              {groupByDate ? "No appointments yet" : "A clear day"}
             </h2>
             <p className="mx-auto mt-2 max-w-sm text-sm leading-6 text-muted">
-              No appointments are booked for this date. Add one when you’re
-              ready.
+              {groupByDate
+                ? "When bookings are added to the schedule, they will appear here."
+                : "No appointments are booked for this date. Add one when you’re ready."}
             </p>
-            <button
-              type="button"
-              className="button-secondary mt-6"
-              onClick={openCreate}
-            >
-              Add first appointment
-            </button>
+            {allowCreate ? (
+              <button
+                type="button"
+                className="button-secondary mt-6"
+                onClick={openCreate}
+              >
+                Add first appointment
+              </button>
+            ) : (
+              <Link href="/" className="button-secondary mt-6 inline-flex">
+                Back to today
+              </Link>
+            )}
+          </div>
+        ) : groupByDate ? (
+          <div className="space-y-8">
+            {Array.from(groupAppointmentsByDate(appointments).entries()).map(
+              ([appointmentDate, dayAppointments]) => (
+                <section
+                  key={appointmentDate}
+                  aria-labelledby={`appointments-${appointmentDate}`}
+                >
+                  <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
+                    <div>
+                      <p className="text-xs font-bold uppercase tracking-[0.18em] text-gold-deep">
+                        {formatIndiaDate(appointmentDate, {
+                          weekday: "long",
+                        })}
+                      </p>
+                      <h2
+                        id={`appointments-${appointmentDate}`}
+                        className="mt-1 font-display text-2xl font-semibold sm:text-3xl"
+                      >
+                        {formatIndiaDate(appointmentDate)}
+                      </h2>
+                    </div>
+                    <Link
+                      href={`/?date=${appointmentDate}`}
+                      className="button-secondary h-10 px-4 text-sm"
+                    >
+                      Open day
+                    </Link>
+                  </div>
+                  <div className="space-y-3">
+                    {dayAppointments.map((appointment) =>
+                      renderAppointmentCard(appointment),
+                    )}
+                  </div>
+                </section>
+              ),
+            )}
           </div>
         ) : (
-          appointments.map((appointment) => {
-            const isCompleted = appointment.isCompleted;
-            const appointmentId = fieldValue(appointment, "id");
-            const isTogglingComplete = completingId === appointmentId;
-
-            return (
-              <article
-                key={appointmentId}
-                className={`group grid gap-4 rounded-2xl border p-4 shadow-[0_10px_35px_rgb(70_55_30/4%)] transition sm:grid-cols-[7rem_minmax(0,1fr)_auto] sm:items-center sm:p-5 ${
-                  isCompleted
-                    ? "border-emerald-200 bg-emerald-50 shadow-[0_10px_35px_rgb(16_185_129/8%)]"
-                    : "border-line bg-paper hover:border-gold/45"
-                }`}
-              >
-                <div
-                  className={`flex items-center gap-2 text-sm font-bold sm:block ${
-                    isCompleted ? "text-emerald-800" : "text-gold-deep"
-                  }`}
-                >
-                  <p>{formatTime(fieldValue(appointment, "startTime"))}</p>
-                  <span className="text-muted sm:hidden">—</span>
-                  <p className="mt-1 text-xs font-medium text-muted">
-                    {formatTime(fieldValue(appointment, "endTime"))}
-                  </p>
-                </div>
-
-                <div
-                  className={`min-w-0 sm:border-l sm:pl-5 ${
-                    isCompleted ? "border-emerald-200" : "border-line"
-                  }`}
-                >
-                  <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-                    <h2
-                      className={`font-display text-xl font-semibold leading-tight sm:text-2xl ${
-                        isCompleted
-                          ? "text-muted line-through decoration-emerald-700/40"
-                          : ""
-                      }`}
-                    >
-                      {fieldValue(appointment, "clientName")}
-                    </h2>
-                    <span className="rounded-full bg-gold/10 px-2.5 py-1 text-[0.68rem] font-bold uppercase tracking-wider text-gold-deep">
-                      {fieldValue(appointment, "service")}
-                    </span>
-                    {isCompleted && (
-                      <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-[0.68rem] font-bold uppercase tracking-wider text-emerald-900">
-                        Done
-                      </span>
-                    )}
-                  </div>
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    {fieldValue(appointment, "phone") && (
-                      <span className="flex items-center gap-1.5 rounded-full border border-line bg-paper/80 px-2.5 py-1 text-xs text-muted">
-                        <Phone aria-hidden="true" className="size-3.5" />
-                        {fieldValue(appointment, "phone")}
-                      </span>
-                    )}
-                    <span className="rounded-xl border border-line bg-paper/80 px-3 py-2 text-xs text-muted">
-                      <span className="block font-bold uppercase tracking-wider text-charcoal/70">
-                        Booking
-                      </span>
-                      <span className="mt-1 flex items-center gap-1.5">
-                        <IndianRupee aria-hidden="true" className="size-3.5" />
-                        {formatMoney(fieldValue(appointment, "bookingAmount"))}
-                        <span className="text-muted">·</span>
-                        {formatPaymentMode(
-                          fieldValue(appointment, "bookingPaymentMode", "cash"),
-                        )}
-                      </span>
-                    </span>
-                    <span className="rounded-xl border border-line bg-paper/80 px-3 py-2 text-xs text-muted">
-                      <span className="block font-bold uppercase tracking-wider text-charcoal/70">
-                        Pending
-                      </span>
-                      <span className="mt-1 flex items-center gap-1.5">
-                        <IndianRupee aria-hidden="true" className="size-3.5" />
-                        {formatMoney(fieldValue(appointment, "pendingAmount"))}
-                        <span className="text-muted">·</span>
-                        {formatPaymentMode(
-                          fieldValue(appointment, "pendingPaymentMode", "cash"),
-                        )}
-                      </span>
-                    </span>
-                  </div>
-                  {fieldValue(appointment, "description") && (
-                    <p className="mt-3 line-clamp-2 text-sm leading-6 text-muted">
-                      {fieldValue(appointment, "description")}
-                    </p>
-                  )}
-                </div>
-
-                <div
-                  className={`flex items-center justify-end gap-1 border-t pt-3 sm:border-0 sm:justify-start sm:pt-0 ${
-                    isCompleted ? "border-emerald-200" : "border-line"
-                  }`}
-                >
-                  <button
-                    type="button"
-                    className={`rounded-full p-2.5 transition disabled:opacity-50 ${
-                      isCompleted
-                        ? "bg-white/80 text-emerald-800 hover:bg-white"
-                        : "text-muted hover:bg-emerald-50 hover:text-emerald-800"
-                    }`}
-                    onClick={() => handleToggleComplete(appointment)}
-                    disabled={isTogglingComplete}
-                    aria-label={
-                      isCompleted
-                        ? `Mark ${fieldValue(appointment, "clientName")}'s appointment as incomplete`
-                        : `Mark ${fieldValue(appointment, "clientName")}'s appointment as done`
-                    }
-                  >
-                    {isCompleted ? (
-                      <CheckCircle2 aria-hidden="true" className="size-4" />
-                    ) : (
-                      <CircleCheck aria-hidden="true" className="size-4" />
-                    )}
-                  </button>
-                  <button
-                    type="button"
-                    className="rounded-full p-2.5 text-muted transition hover:bg-cream hover:text-charcoal"
-                    onClick={() => openEdit(appointment)}
-                    aria-label={`Edit ${fieldValue(appointment, "clientName")}'s appointment`}
-                  >
-                    <Edit3 aria-hidden="true" className="size-4" />
-                  </button>
-                  <button
-                    type="button"
-                    className="rounded-full p-2.5 text-muted transition hover:bg-red-50 hover:text-danger"
-                    onClick={() => {
-                      setError("");
-                      setDeleting(appointment);
-                    }}
-                    aria-label={`Delete ${fieldValue(appointment, "clientName")}'s appointment`}
-                  >
-                    <Trash2 aria-hidden="true" className="size-4" />
-                  </button>
-                </div>
-              </article>
-            );
-          })
+          appointments.map((appointment) => renderAppointmentCard(appointment))
         )}
       </div>
 

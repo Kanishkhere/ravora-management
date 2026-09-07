@@ -98,6 +98,25 @@ export async function getAppointmentsForDate(
   return (data as AppointmentRow[]).map(toAppointment);
 }
 
+export async function getAllAppointments(): Promise<Appointment[]> {
+  const { supabase, user } = await authenticatedClient();
+  if (!user) {
+    throw new Error("Authentication required.");
+  }
+
+  const { data, error } = await supabase
+    .from("appointments")
+    .select("*")
+    .order("appointment_date", { ascending: false })
+    .order("start_time", { ascending: true });
+
+  if (error) {
+    throw new Error("Unable to load appointments.");
+  }
+
+  return (data as AppointmentRow[]).map(toAppointment);
+}
+
 export async function saveAppointment(
   input: AppointmentInput,
 ): Promise<SaveAppointmentResult> {
@@ -201,6 +220,7 @@ export async function saveAppointment(
   }
 
   revalidatePath("/");
+  revalidatePath("/appointments");
   return { success: true, appointment: toAppointment(data as AppointmentRow) };
 }
 
@@ -222,6 +242,7 @@ export async function deleteAppointment(
   }
 
   revalidatePath("/");
+  revalidatePath("/appointments");
   return { success: true };
 }
 
@@ -262,5 +283,6 @@ export async function toggleAppointmentComplete(
   }
 
   revalidatePath("/");
+  revalidatePath("/appointments");
   return { success: true, appointment: toAppointment(data as AppointmentRow) };
 }
