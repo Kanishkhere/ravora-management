@@ -448,12 +448,18 @@ export function AppointmentManager({
               )}
             </div>
             <h2 className="mt-4 font-display text-2xl font-semibold">
-              {groupByDate ? "No appointments yet" : "A clear day"}
+              {groupByDate && !allowCreate
+                ? "No pending appointments"
+                : groupByDate
+                  ? "No appointments yet"
+                  : "A clear day"}
             </h2>
             <p className="mx-auto mt-2 max-w-sm text-sm leading-6 text-muted">
-              {groupByDate
-                ? "When bookings are added to the schedule, they will appear here."
-                : "No appointments are booked for this date. Add one when you’re ready."}
+              {groupByDate && !allowCreate
+                ? "Completed bookings are hidden here. Add a new one from the day schedule, or mark one incomplete to bring it back."
+                : groupByDate
+                  ? "When bookings are added to the schedule, they will appear here."
+                  : "No appointments are booked for this date. Add one when you’re ready."}
             </p>
             {allowCreate ? (
               <button

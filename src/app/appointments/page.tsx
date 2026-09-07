@@ -17,7 +17,8 @@ export default async function AllAppointmentsPage() {
   let loadError = "";
 
   try {
-    appointments = await getAllAppointments();
+    const allAppointments = await getAllAppointments();
+    appointments = allAppointments.filter((appointment) => !appointment.isCompleted);
   } catch {
     loadError = "The appointment list couldn’t be loaded. Please refresh and try again.";
   }
@@ -58,7 +59,7 @@ export default async function AllAppointmentsPage() {
             All appointments
           </h1>
           <p className="mt-2 text-sm text-muted">
-            {appointments.length} appointment
+            {appointments.length} pending appointment
             {appointments.length === 1 ? "" : "s"} across the studio calendar.
           </p>
         </div>
