@@ -4,13 +4,28 @@ import { AppointmentManager } from "@/components/appointment-manager";
 import { BrandMark } from "@/components/brand-mark";
 import type { Appointment } from "@/types/appointment";
 import { todayInIndia } from "@/lib/format";
-import { ArrowLeft, List, LogOut, TriangleAlert } from "lucide-react";
+import { ArrowLeft, IndianRupee, List, LogOut, TriangleAlert } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 
 export const metadata: Metadata = {
   title: "All appointments",
 };
+
+function amountTotal(appointments: Appointment[], key: keyof Appointment) {
+  return appointments.reduce((total, appointment) => {
+    const value = Number(appointment[key] ?? 0);
+    return total + (Number.isFinite(value) ? value : 0);
+  }, 0);
+}
+
+function formatMoney(value: number) {
+  return new Intl.NumberFormat("en-IN", {
+    style: "currency",
+    currency: "INR",
+    maximumFractionDigits: 0,
+  }).format(value);
+}
 
 export default async function AllAppointmentsPage() {
   let appointments: Appointment[] = [];
@@ -22,6 +37,9 @@ export default async function AllAppointmentsPage() {
   } catch {
     loadError = "The appointment list couldn’t be loaded. Please refresh and try again.";
   }
+
+  const bookingTotal = amountTotal(appointments, "bookingAmount");
+  const pendingTotal = amountTotal(appointments, "pendingAmount");
 
   return (
     <div className="paper-texture min-h-screen">
@@ -63,6 +81,32 @@ export default async function AllAppointmentsPage() {
             {appointments.length === 1 ? "" : "s"} across the studio calendar.
           </p>
         </div>
+
+        {!loadError && (
+          <section
+            aria-label="Pending appointment totals"
+            className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-2"
+          >
+            <div className="rounded-2xl border border-line bg-paper/80 p-4">
+              <p className="text-xs font-bold uppercase tracking-wider text-muted">
+                Total booking
+              </p>
+              <p className="mt-2 flex items-center gap-1 font-display text-3xl font-semibold">
+                <IndianRupee aria-hidden="true" className="size-5 text-gold" />
+                {formatMoney(bookingTotal).replace("₹", "").trim()}
+              </p>
+            </div>
+            <div className="rounded-2xl border border-line bg-paper/80 p-4">
+              <p className="text-xs font-bold uppercase tracking-wider text-muted">
+                Total pending
+              </p>
+              <p className="mt-2 flex items-center gap-1 font-display text-3xl font-semibold text-gold-deep">
+                <IndianRupee aria-hidden="true" className="size-5" />
+                {formatMoney(pendingTotal).replace("₹", "").trim()}
+              </p>
+            </div>
+          </section>
+        )}
 
         <section className="mt-8" aria-labelledby="all-appointments-heading">
           <h2 id="all-appointments-heading" className="sr-only">
