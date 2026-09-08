@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import { getOverlapMinutes } from "@/lib/appointments/overlap";
-import { toIndiaIsoInstant } from "@/lib/format";
+import { toIndiaIsoInstant, currentMonthRangeInIndia } from "@/lib/format";
 import { createClient } from "@/lib/supabase/server";
 import {
   appointmentInputSchema,
@@ -107,7 +107,31 @@ export async function getAllAppointments(): Promise<Appointment[]> {
   const { data, error } = await supabase
     .from("appointments")
     .select("*")
-    .order("appointment_date", { ascending: false })
+    .order("appointment_date", { ascending: true })
+    .order("start_time", { ascending: true });
+
+  if (error) {
+    throw new Error("Unable to load appointments.");
+  }
+
+  return (data as AppointmentRow[]).map(toAppointment);
+}
+
+export async function getAppointmentsForCurrentMonthInIndia(): Promise<
+  Appointment[]
+> {
+  const { start, end } = currentMonthRangeInIndia();
+  const { supabase, user } = await authenticatedClient();
+  if (!user) {
+    throw new Error("Authentication required.");
+  }
+
+  const { data, error } = await supabase
+    .from("appointments")
+    .select("*")
+    .gte("appointment_date", start)
+    .lte("appointment_date", end)
+    .order("appointment_date", { ascending: true })
     .order("start_time", { ascending: true });
 
   if (error) {

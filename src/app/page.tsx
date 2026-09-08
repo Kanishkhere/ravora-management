@@ -1,10 +1,13 @@
-import { getAppointmentsForDate } from "@/actions/appointments";
+import {
+  getAppointmentsForCurrentMonthInIndia,
+  getAppointmentsForDate,
+} from "@/actions/appointments";
 import { logout } from "@/actions/auth";
 import type { Appointment } from "@/types/appointment";
 import { AppointmentManager } from "@/components/appointment-manager";
 import { BrandMark } from "@/components/brand-mark";
 import { DateNavigation } from "@/components/date-navigation";
-import { todayInIndia } from "@/lib/format";
+import { currentMonthLabelInIndia, todayInIndia } from "@/lib/format";
 import { format, isValid, parseISO } from "date-fns";
 import { CalendarDays, IndianRupee, List, LogOut, TriangleAlert } from "lucide-react";
 import Link from "next/link";
@@ -26,6 +29,20 @@ function amountTotal(appointments: Appointment[], key: keyof Appointment) {
   }, 0);
 }
 
+function openAppointments(appointments: Appointment[]) {
+  return appointments.filter((appointment) => !appointment.isCompleted);
+}
+
+function totalSales(appointments: Appointment[]) {
+  return appointments.reduce(
+    (total, appointment) =>
+      total +
+      appointment.bookingAmount +
+      (appointment.isCompleted ? appointment.pendingAmount : 0),
+    0,
+  );
+}
+
 function formatMoney(value: number) {
   return new Intl.NumberFormat("en-IN", {
     style: "currency",
@@ -42,10 +59,14 @@ export default async function Home({ searchParams }: HomeProps) {
     : todayInIndia();
 
   let appointments: Appointment[] = [];
+  let monthAppointments: Appointment[] = [];
   let loadError = "";
 
   try {
-    appointments = await getAppointmentsForDate(date);
+    [appointments, monthAppointments] = await Promise.all([
+      getAppointmentsForDate(date),
+      getAppointmentsForCurrentMonthInIndia(),
+    ]);
     appointments.sort((a, b) =>
       String(a.startTime).localeCompare(String(b.startTime)),
     );
@@ -53,8 +74,11 @@ export default async function Home({ searchParams }: HomeProps) {
     loadError = "The schedule couldn’t be loaded. Please refresh and try again.";
   }
 
-  const bookingTotal = amountTotal(appointments, "bookingAmount");
-  const pendingTotal = amountTotal(appointments, "pendingAmount");
+  const open = openAppointments(appointments);
+  const bookingTotal = amountTotal(open, "bookingAmount");
+  const pendingTotal = amountTotal(open, "pendingAmount");
+  const salesTotal = totalSales(monthAppointments);
+  const salesMonthLabel = currentMonthLabelInIndia();
   const selectedDate = parseISO(date);
 
   return (
@@ -100,7 +124,7 @@ export default async function Home({ searchParams }: HomeProps) {
 
         <section
           aria-label="Daily summary"
-          className="mt-6 grid grid-cols-1 gap-3 sm:mt-8 sm:grid-cols-3"
+          className="mt-6 grid grid-cols-1 gap-3 sm:mt-8 sm:grid-cols-2 lg:grid-cols-4"
         >
           <div className="rounded-2xl border border-line bg-paper/80 p-4">
             <p className="text-xs font-bold uppercase tracking-wider text-muted">
@@ -118,6 +142,7 @@ export default async function Home({ searchParams }: HomeProps) {
               <IndianRupee aria-hidden="true" className="size-5 text-gold" />
               {formatMoney(bookingTotal).replace("₹", "").trim()}
             </p>
+            <p className="mt-1 text-xs text-muted">Open appointments only</p>
           </div>
           <div className="rounded-2xl border border-line bg-paper/80 p-4">
             <p className="text-xs font-bold uppercase tracking-wider text-muted">
@@ -126,6 +151,20 @@ export default async function Home({ searchParams }: HomeProps) {
             <p className="mt-2 flex items-center gap-1 font-display text-3xl font-semibold text-gold-deep">
               <IndianRupee aria-hidden="true" className="size-5" />
               {formatMoney(pendingTotal).replace("₹", "").trim()}
+            </p>
+            <p className="mt-1 text-xs text-muted">Open appointments only</p>
+          </div>
+          <div className="rounded-2xl border border-line bg-emerald-50/80 p-4">
+            <p className="text-xs font-bold uppercase tracking-wider text-emerald-900/70">
+              Total sales{" "}
+              <span className="normal-case">({salesMonthLabel})</span>
+            </p>
+            <p className="mt-2 flex items-center gap-1 font-display text-3xl font-semibold text-emerald-900">
+              <IndianRupee aria-hidden="true" className="size-5" />
+              {formatMoney(salesTotal).replace("₹", "").trim()}
+            </p>
+            <p className="mt-1 text-xs text-emerald-900/70">
+              All bookings plus pending from completed appointments
             </p>
           </div>
         </section>

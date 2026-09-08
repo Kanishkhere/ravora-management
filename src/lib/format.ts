@@ -52,6 +52,24 @@ export function todayInIndia(): string {
   return `${values.year}-${values.month}-${values.day}`;
 }
 
+export function currentMonthRangeInIndia(referenceDate = todayInIndia()) {
+  const [year, month] = referenceDate.split("-");
+  const monthNumber = Number(month);
+  const lastDay = new Date(Number(year), monthNumber, 0).getDate();
+
+  return {
+    start: `${year}-${month}-01`,
+    end: `${year}-${month}-${String(lastDay).padStart(2, "0")}`,
+  };
+}
+
+export function currentMonthLabelInIndia(referenceDate = todayInIndia()) {
+  return new Intl.DateTimeFormat("en-IN", {
+    timeZone: INDIA_TIME_ZONE,
+    month: "long",
+  }).format(parseISO(referenceDate));
+}
+
 export function formatDateInput(date: Date): string {
   return format(date, "yyyy-MM-dd");
 }
