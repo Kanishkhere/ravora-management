@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { normalizeIndiaWhatsAppPhone } from "../whatsapp/confirmation";
+
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 const TIME_PATTERN = /^([01]\d|2[0-3]):[0-5]\d$/;
 const MONEY_PATTERN = /^(?:0|[1-9]\d*)(?:\.\d{1,2})?$/;
@@ -54,7 +56,11 @@ export const appointmentInputSchema = z
       .trim()
       .max(30, "Phone must be 30 characters or fewer.")
       .optional()
-      .default(""),
+      .default("")
+      .refine(
+        (value) => !value || normalizeIndiaWhatsAppPhone(value) !== null,
+        "Enter a valid 10-digit Indian mobile number.",
+      ),
     service: z
       .string()
       .trim()

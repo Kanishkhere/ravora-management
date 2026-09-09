@@ -25,6 +25,24 @@ describe("appointment validation", () => {
     expect(appointmentInputSchema.safeParse(validInput).success).toBe(true);
   });
 
+  it("accepts a valid Indian mobile number", () => {
+    expect(
+      appointmentInputSchema.safeParse({
+        ...validInput,
+        phone: "+91 98765 43210",
+      }).success,
+    ).toBe(true);
+  });
+
+  it("rejects an invalid phone number", () => {
+    expect(
+      appointmentInputSchema.safeParse({
+        ...validInput,
+        phone: "12345",
+      }).success,
+    ).toBe(false);
+  });
+
   it("rejects an invalid payment mode", () => {
     expect(
       appointmentInputSchema.safeParse({

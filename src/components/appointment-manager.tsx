@@ -13,6 +13,7 @@ import {
   CircleCheck,
   Edit3,
   IndianRupee,
+  MessageCircle,
   Phone,
   Trash2,
   TriangleAlert,
@@ -22,6 +23,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FormEvent, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { formatIndiaDate } from "@/lib/format";
+import { getAppointmentWhatsAppConfirmationUrl } from "@/lib/whatsapp/confirmation";
 
 type Conflict = {
   id: string;
@@ -120,6 +122,8 @@ export function AppointmentManager({
   const [pendingInput, setPendingInput] = useState<
     Parameters<typeof saveAppointment>[0] | null
   >(null);
+  const [createdAppointment, setCreatedAppointment] =
+    useState<Appointment | null>(null);
   const ready = useSyncExternalStore(
     () => () => {},
     () => true,
@@ -134,6 +138,7 @@ export function AppointmentManager({
 
   function openCreate() {
     setEditing(null);
+    setCreatedAppointment(null);
     setError("");
     setFieldErrors({});
     setConflicts([]);
@@ -143,6 +148,7 @@ export function AppointmentManager({
 
   function openEdit(appointment: Appointment) {
     setEditing(appointment);
+    setCreatedAppointment(null);
     setError("");
     setFieldErrors({});
     setConflicts([]);
@@ -153,10 +159,26 @@ export function AppointmentManager({
   function closeEditor() {
     if (pending) return;
     setDialogOpen(false);
+    setCreatedAppointment(null);
     setError("");
     setFieldErrors({});
     setConflicts([]);
     setPendingInput(null);
+  }
+
+  function finishCreateFlow() {
+    setDialogOpen(false);
+    setCreatedAppointment(null);
+    setError("");
+    setFieldErrors({});
+    setConflicts([]);
+    setPendingInput(null);
+  }
+
+  function openWhatsAppConfirmation(appointment: Appointment) {
+    const url = getAppointmentWhatsAppConfirmationUrl(appointment);
+    if (!url) return;
+    window.open(url, "_blank", "noopener,noreferrer");
   }
 
   async function persist(input: Parameters<typeof saveAppointment>[0]) {
@@ -167,6 +189,15 @@ export function AppointmentManager({
       const result = await saveAppointment(input);
 
       if (result.success) {
+        if (!input.id) {
+          setCreatedAppointment(result.appointment);
+          setEditing(null);
+          setConflicts([]);
+          setPendingInput(null);
+          router.refresh();
+          return;
+        }
+
         setDialogOpen(false);
         setConflicts([]);
         setPendingInput(null);
@@ -267,6 +298,7 @@ export function AppointmentManager({
     const isCompleted = appointment.isCompleted;
     const appointmentId = fieldValue(appointment, "id");
     const isTogglingComplete = completingId === appointmentId;
+    const whatsappUrl = getAppointmentWhatsAppConfirmationUrl(appointment);
 
     return (
       <article
@@ -384,6 +416,16 @@ export function AppointmentManager({
               <CircleCheck aria-hidden="true" className="size-4" />
             )}
           </button>
+          {whatsappUrl && (
+            <button
+              type="button"
+              className="rounded-full p-2.5 text-muted transition hover:bg-emerald-50 hover:text-emerald-800"
+              onClick={() => openWhatsAppConfirmation(appointment)}
+              aria-label={`Send WhatsApp confirmation to ${fieldValue(appointment, "clientName")}`}
+            >
+              <MessageCircle aria-hidden="true" className="size-4" />
+            </button>
+          )}
           <button
             type="button"
             className="rounded-full p-2.5 text-muted transition hover:bg-cream hover:text-charcoal"
@@ -533,25 +575,89 @@ export function AppointmentManager({
             <div className="sticky top-0 z-10 flex items-start justify-between border-b border-line bg-paper/95 px-5 py-4 backdrop-blur sm:px-7">
               <div>
                 <p className="text-xs font-bold uppercase tracking-[0.18em] text-gold-deep">
-                  {editing ? "Update booking" : "New booking"}
+                  {createdAppointment
+                    ? "Booking saved"
+                    : editing
+                      ? "Update booking"
+                      : "New booking"}
                 </p>
                 <h2
                   id="appointment-dialog-title"
                   className="mt-1 font-display text-2xl font-semibold sm:text-3xl"
                 >
-                  Appointment details
+                  {createdAppointment
+                    ? "WhatsApp confirmation"
+                    : "Appointment details"}
                 </h2>
               </div>
               <button
                 type="button"
-                onClick={closeEditor}
+                onClick={createdAppointment ? finishCreateFlow : closeEditor}
                 className="rounded-full p-2 text-muted hover:bg-cream"
-                aria-label="Close appointment form"
+                aria-label={
+                  createdAppointment
+                    ? "Close confirmation dialog"
+                    : "Close appointment form"
+                }
               >
                 <X aria-hidden="true" className="size-5" />
               </button>
             </div>
 
+            {createdAppointment ? (
+              <div className="space-y-5 p-5 sm:p-7">
+                <p className="text-sm leading-6 text-muted">
+                  The appointment for{" "}
+                  <strong className="text-charcoal">
+                    {createdAppointment.clientName}
+                  </strong>{" "}
+                  on {formatIndiaDate(createdAppointment.date)} is saved.
+                </p>
+
+                {getAppointmentWhatsAppConfirmationUrl(createdAppointment) ? (
+                  <>
+                    <p className="text-sm leading-6 text-muted">
+                      Open WhatsApp with a pre-filled confirmation message.
+                      Review it and tap Send.
+                    </p>
+                    <div className="flex flex-col-reverse gap-3 border-t border-line pt-5 sm:flex-row sm:justify-end">
+                      <button
+                        type="button"
+                        className="button-secondary"
+                        onClick={finishCreateFlow}
+                      >
+                        Done
+                      </button>
+                      <button
+                        type="button"
+                        className="button-primary"
+                        onClick={() =>
+                          openWhatsAppConfirmation(createdAppointment)
+                        }
+                      >
+                        <MessageCircle aria-hidden="true" className="size-4" />
+                        Send WhatsApp confirmation
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
+                      Add a valid phone number to send a WhatsApp confirmation.
+                    </p>
+                    <div className="flex justify-end border-t border-line pt-5">
+                      <button
+                        type="button"
+                        className="button-primary"
+                        onClick={finishCreateFlow}
+                      >
+                        Done
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+            ) : (
             <form onSubmit={handleSubmit} className="space-y-5 p-5 sm:p-7">
               <div className="grid gap-5 sm:grid-cols-2">
                 <label htmlFor="clientName">
@@ -853,6 +959,7 @@ export function AppointmentManager({
                 </button>
               </div>
             </form>
+            )}
           </div>
         </>
       )}
