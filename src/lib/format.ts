@@ -73,3 +73,30 @@ export function currentMonthLabelInIndia(referenceDate = todayInIndia()) {
 export function formatDateInput(date: Date): string {
   return format(date, "yyyy-MM-dd");
 }
+
+export function currentMonthKeyInIndia(referenceDate = todayInIndia()) {
+  return referenceDate.slice(0, 7);
+}
+
+export function isMonthKey(value: string | undefined): value is string {
+  return Boolean(value && /^\d{4}-(0[1-9]|1[0-2])$/.test(value));
+}
+
+/** First and last calendar day (YYYY-MM-DD) of a YYYY-MM month key. */
+export function monthRangeFromKey(monthKey: string) {
+  return currentMonthRangeInIndia(`${monthKey}-01`);
+}
+
+export function formatMonthKey(monthKey: string) {
+  return new Intl.DateTimeFormat("en-IN", {
+    timeZone: "UTC",
+    month: "long",
+    year: "numeric",
+  }).format(new Date(`${monthKey}-01T00:00:00Z`));
+}
+
+export function shiftMonthKey(monthKey: string, delta: number) {
+  const [year, month] = monthKey.split("-").map(Number);
+  const shifted = new Date(Date.UTC(year, month - 1 + delta, 1));
+  return `${shifted.getUTCFullYear()}-${String(shifted.getUTCMonth() + 1).padStart(2, "0")}`;
+}

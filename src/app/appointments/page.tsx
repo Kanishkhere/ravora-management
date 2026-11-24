@@ -1,6 +1,7 @@
 import { getAllAppointments } from "@/actions/appointments";
 import { logout } from "@/actions/auth";
 import { AppointmentManager } from "@/components/appointment-manager";
+import { AppNav } from "@/components/app-nav";
 import { BrandMark } from "@/components/brand-mark";
 import type { Appointment } from "@/types/appointment";
 import { todayInIndia } from "@/lib/format";
@@ -58,6 +59,7 @@ export default async function AllAppointmentsPage() {
           </form>
         </div>
       </header>
+      <AppNav />
 
       <main className="mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-10 lg:px-8 lg:py-12">
         <Link

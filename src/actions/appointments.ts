@@ -4,13 +4,18 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import { getOverlapMinutes } from "@/lib/appointments/overlap";
-import { toIndiaIsoInstant, currentMonthRangeInIndia } from "@/lib/format";
+import {
+  currentMonthRangeInIndia,
+  monthRangeFromKey,
+  toIndiaIsoInstant,
+} from "@/lib/format";
 import { createClient } from "@/lib/supabase/server";
 import {
   appointmentInputSchema,
   dateSchema,
   rupeesToPaise,
 } from "@/lib/validation/appointment";
+import { monthKeySchema } from "@/lib/validation/expense";
 import type {
   Appointment,
   AppointmentConflict,
@@ -121,6 +126,25 @@ export async function getAppointmentsForCurrentMonthInIndia(): Promise<
   Appointment[]
 > {
   const { start, end } = currentMonthRangeInIndia();
+  return getAppointmentsBetween(start, end);
+}
+
+export async function getAppointmentsForMonth(
+  monthKey: string,
+): Promise<Appointment[]> {
+  const parsed = monthKeySchema.safeParse(monthKey);
+  if (!parsed.success) {
+    throw new Error("Invalid month.");
+  }
+
+  const { start, end } = monthRangeFromKey(parsed.data);
+  return getAppointmentsBetween(start, end);
+}
+
+async function getAppointmentsBetween(
+  start: string,
+  end: string,
+): Promise<Appointment[]> {
   const { supabase, user } = await authenticatedClient();
   if (!user) {
     throw new Error("Authentication required.");

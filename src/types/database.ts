@@ -16,6 +16,17 @@ export type AppointmentRow = {
   updated_at: string;
 };
 
+export type ExpenseRow = {
+  id: string;
+  expense_date: string;
+  category: string;
+  description: string;
+  amount_paise: number;
+  payment_mode: string;
+  created_at: string;
+  updated_at: string;
+};
+
 export type Database = {
   public: {
     Tables: {
@@ -40,6 +51,20 @@ export type Database = {
         Update: Partial<
           Omit<AppointmentRow, "id" | "created_at">
         >;
+        Relationships: [];
+      };
+      expenses: {
+        Row: ExpenseRow;
+        Insert: Omit<
+          ExpenseRow,
+          "id" | "created_at" | "updated_at" | "payment_mode"
+        > & {
+          id?: string;
+          payment_mode?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Omit<ExpenseRow, "id" | "created_at">>;
         Relationships: [];
       };
     };

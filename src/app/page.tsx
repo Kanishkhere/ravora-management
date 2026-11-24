@@ -5,8 +5,10 @@ import {
 import { logout } from "@/actions/auth";
 import type { Appointment } from "@/types/appointment";
 import { AppointmentManager } from "@/components/appointment-manager";
+import { AppNav } from "@/components/app-nav";
 import { BrandMark } from "@/components/brand-mark";
 import { DateNavigation } from "@/components/date-navigation";
+import { totalSales } from "@/lib/finance";
 import { currentMonthLabelInIndia, todayInIndia } from "@/lib/format";
 import { format, isValid, parseISO } from "date-fns";
 import { CalendarDays, IndianRupee, List, LogOut, TriangleAlert } from "lucide-react";
@@ -31,16 +33,6 @@ function amountTotal(appointments: Appointment[], key: keyof Appointment) {
 
 function openAppointments(appointments: Appointment[]) {
   return appointments.filter((appointment) => !appointment.isCompleted);
-}
-
-function totalSales(appointments: Appointment[]) {
-  return appointments.reduce(
-    (total, appointment) =>
-      total +
-      appointment.bookingAmount +
-      (appointment.isCompleted ? appointment.pendingAmount : 0),
-    0,
-  );
 }
 
 function formatMoney(value: number) {
@@ -98,6 +90,7 @@ export default async function Home({ searchParams }: HomeProps) {
           </form>
         </div>
       </header>
+      <AppNav />
 
       <main className="mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-10 lg:px-8 lg:py-12">
         <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">

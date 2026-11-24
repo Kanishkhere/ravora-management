@@ -36,11 +36,12 @@ Requirements: Node.js 22 or newer, npm, and a Supabase account.
 
 1. Install dependencies with `npm install`.
 2. Create a project at [supabase.com](https://supabase.com), then open its SQL
-   Editor and run both migration files in order:
+   Editor and run the migration files in order:
    - `supabase/migrations/20260907190000_create_appointments.sql`
    - `supabase/migrations/20260908133000_add_appointment_completed.sql`
    - `supabase/migrations/20260908140000_add_payment_modes.sql`
    - `supabase/migrations/20260908150000_remove_appointment_user_binding.sql`
+   - `supabase/migrations/20261124120000_create_expenses.sql`
 3. In Supabase, open **Project settings → API**. Copy `.env.example` to
    `.env.local` and enter the project URL and publishable key:
 
