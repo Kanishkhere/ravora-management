@@ -2,16 +2,17 @@ import {
   getAppointmentsForCurrentMonthInIndia,
   getAppointmentsForDate,
 } from "@/actions/appointments";
-import { logout } from "@/actions/auth";
 import type { Appointment } from "@/types/appointment";
 import { AppointmentManager } from "@/components/appointment-manager";
 import { AppNav } from "@/components/app-nav";
+import { LinkIcon } from "@/components/pending";
+import { LogoutButton } from "@/components/logout-button";
 import { BrandMark } from "@/components/brand-mark";
 import { DateNavigation } from "@/components/date-navigation";
 import { totalSales } from "@/lib/finance";
 import { currentMonthLabelInIndia, todayInIndia } from "@/lib/format";
 import { format, isValid, parseISO } from "date-fns";
-import { CalendarDays, IndianRupee, List, LogOut, TriangleAlert } from "lucide-react";
+import { CalendarDays, IndianRupee, List, TriangleAlert } from "lucide-react";
 import Link from "next/link";
 
 type HomeProps = {
@@ -78,21 +79,12 @@ export default async function Home({ searchParams }: HomeProps) {
       <header className="border-b border-line/80 bg-paper/75 backdrop-blur">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3 sm:px-6 sm:py-4 lg:px-8">
           <BrandMark priority className="min-w-0" />
-          <form action={logout}>
-            <button
-              type="submit"
-              className="button-secondary size-11 p-0 sm:w-auto sm:px-4"
-              aria-label="Log out"
-            >
-              <LogOut aria-hidden="true" className="size-4" />
-              <span className="hidden sm:inline">Log out</span>
-            </button>
-          </form>
+          <LogoutButton />
         </div>
       </header>
       <AppNav />
 
-      <main className="mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-10 lg:px-8 lg:py-12">
+      <main data-pending-dim className="mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-10 lg:px-8 lg:py-12">
         <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
           <div className="min-w-0">
             <p className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.18em] text-gold-deep">
@@ -109,7 +101,9 @@ export default async function Home({ searchParams }: HomeProps) {
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
             <DateNavigation date={date} />
             <Link href="/appointments" className="button-secondary h-11 w-full justify-center sm:w-auto">
-              <List aria-hidden="true" className="size-4" />
+              <LinkIcon>
+                <List aria-hidden="true" className="size-4" />
+              </LinkIcon>
               List all appointments
             </Link>
           </div>

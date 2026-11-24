@@ -3,11 +3,14 @@
 import { ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useTransition } from "react";
 
 import {
   currentMonthKeyInIndia,
   shiftMonthKey,
 } from "@/lib/format";
+
+import { LinkIcon, LinkSpinner, NavMarker, Spinner } from "./pending";
 
 type MonthFilterProps = {
   month: string;
@@ -21,6 +24,7 @@ const MONTH_NAMES = Array.from({ length: 12 }, (_, index) =>
 
 export function MonthFilter({ month }: MonthFilterProps) {
   const router = useRouter();
+  const [isPending, startTransition] = useTransition();
   const [yearText, monthText] = month.split("-");
   const year = Number(yearText);
   const currentMonth = currentMonthKeyInIndia();
@@ -33,7 +37,9 @@ export function MonthFilter({ month }: MonthFilterProps) {
   );
 
   function go(key: string) {
-    if (key !== month) router.push(`/expenses?month=${key}`);
+    if (key !== month) {
+      startTransition(() => router.push(`/expenses?month=${key}`));
+    }
   }
 
   const arrowClass =
@@ -46,13 +52,16 @@ export function MonthFilter({ month }: MonthFilterProps) {
       aria-label="Filter by month"
       className="flex w-full flex-wrap items-center gap-2 sm:w-auto"
     >
+      <NavMarker active={isPending} />
       <div className="flex w-full items-center gap-1 rounded-full border border-line bg-paper p-1 shadow-[0_6px_20px_rgb(70_55_30/5%)] sm:w-auto">
         <Link
           href={`/expenses?month=${shiftMonthKey(month, -1)}`}
           className={arrowClass}
           aria-label="Previous month"
         >
-          <ChevronLeft aria-hidden="true" className="size-4" />
+          <LinkIcon>
+            <ChevronLeft aria-hidden="true" className="size-4" />
+          </LinkIcon>
         </Link>
 
         <div className="relative min-w-0 flex-1 sm:w-36 sm:flex-none">
@@ -68,10 +77,9 @@ export function MonthFilter({ month }: MonthFilterProps) {
               </option>
             ))}
           </select>
-          <ChevronDown
-            aria-hidden="true"
-            className="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 text-gold-deep"
-          />
+          <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gold-deep">
+            {isPending ? <Spinner /> : <ChevronDown aria-hidden="true" className="size-4" />}
+          </span>
         </div>
 
         <span aria-hidden="true" className="h-5 w-px shrink-0 bg-line" />
@@ -89,10 +97,9 @@ export function MonthFilter({ month }: MonthFilterProps) {
               </option>
             ))}
           </select>
-          <ChevronDown
-            aria-hidden="true"
-            className="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 text-gold-deep"
-          />
+          <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gold-deep">
+            {isPending ? <Spinner /> : <ChevronDown aria-hidden="true" className="size-4" />}
+          </span>
         </div>
 
         <Link
@@ -100,7 +107,9 @@ export function MonthFilter({ month }: MonthFilterProps) {
           className={arrowClass}
           aria-label="Next month"
         >
-          <ChevronRight aria-hidden="true" className="size-4" />
+          <LinkIcon>
+            <ChevronRight aria-hidden="true" className="size-4" />
+          </LinkIcon>
         </Link>
       </div>
 
@@ -109,6 +118,7 @@ export function MonthFilter({ month }: MonthFilterProps) {
           href={`/expenses?month=${currentMonth}`}
           className="button-secondary h-11 px-4"
         >
+          <LinkSpinner />
           This month
         </Link>
       )}

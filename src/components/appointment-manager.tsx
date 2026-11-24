@@ -23,6 +23,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FormEvent, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { formatIndiaDate } from "@/lib/format";
+import { LinkSpinner, Spinner } from "./pending";
 import { getAppointmentWhatsAppConfirmationUrl } from "@/lib/whatsapp/confirmation";
 
 type Conflict = {
@@ -410,7 +411,9 @@ export function AppointmentManager({
                 : `Mark ${fieldValue(appointment, "clientName")}'s appointment as done`
             }
           >
-            {isCompleted ? (
+            {isTogglingComplete ? (
+              <Spinner />
+            ) : isCompleted ? (
               <CheckCircle2 aria-hidden="true" className="size-4" />
             ) : (
               <CircleCheck aria-hidden="true" className="size-4" />
@@ -513,6 +516,7 @@ export function AppointmentManager({
               </button>
             ) : (
               <Link href="/" className="button-secondary mt-6 inline-flex">
+                <LinkSpinner />
                 Back to today
               </Link>
             )}
@@ -543,6 +547,7 @@ export function AppointmentManager({
                       href={`/?date=${appointmentDate}`}
                       className="button-secondary h-10 px-4 text-sm"
                     >
+                      <LinkSpinner />
                       Open day
                     </Link>
                   </div>
@@ -943,6 +948,7 @@ export function AppointmentManager({
                       persist({ ...pendingInput, forceOverlap: true })
                     }
                   >
+                    {pending && <Spinner />}
                     {pending ? "Booking…" : "Book anyway"}
                   </button>
                 )}
@@ -951,6 +957,7 @@ export function AppointmentManager({
                   className="button-primary"
                   disabled={pending}
                 >
+                  {pending && <Spinner />}
                   {pending
                     ? "Saving…"
                     : editing
@@ -1012,6 +1019,7 @@ export function AppointmentManager({
                 onClick={confirmDelete}
                 disabled={pending}
               >
+                {pending && <Spinner />}
                 {pending ? "Deleting…" : "Delete"}
               </button>
             </div>

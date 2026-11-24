@@ -4,6 +4,8 @@ import { CalendarDays, Receipt } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
+import { LinkIcon } from "./pending";
+
 const tabs = [
   { href: "/", label: "Schedule", icon: CalendarDays },
   { href: "/expenses", label: "Expenses", icon: Receipt },
@@ -32,7 +34,9 @@ export function AppNav() {
                   : "border-transparent text-muted hover:text-charcoal"
               }`}
             >
-              <Icon aria-hidden="true" className="size-4" />
+              <LinkIcon>
+                <Icon aria-hidden="true" className="size-4" />
+              </LinkIcon>
               {label}
             </Link>
           );

@@ -1,11 +1,12 @@
 import { getAllAppointments } from "@/actions/appointments";
-import { logout } from "@/actions/auth";
 import { AppointmentManager } from "@/components/appointment-manager";
 import { AppNav } from "@/components/app-nav";
+import { LinkIcon } from "@/components/pending";
+import { LogoutButton } from "@/components/logout-button";
 import { BrandMark } from "@/components/brand-mark";
 import type { Appointment } from "@/types/appointment";
 import { todayInIndia } from "@/lib/format";
-import { ArrowLeft, IndianRupee, List, LogOut, TriangleAlert } from "lucide-react";
+import { ArrowLeft, IndianRupee, List, TriangleAlert } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 
@@ -47,26 +48,19 @@ export default async function AllAppointmentsPage() {
       <header className="border-b border-line/80 bg-paper/75 backdrop-blur">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3 sm:px-6 sm:py-4 lg:px-8">
           <BrandMark priority className="min-w-0" />
-          <form action={logout}>
-            <button
-              type="submit"
-              className="button-secondary size-11 p-0 sm:w-auto sm:px-4"
-              aria-label="Log out"
-            >
-              <LogOut aria-hidden="true" className="size-4" />
-              <span className="hidden sm:inline">Log out</span>
-            </button>
-          </form>
+          <LogoutButton />
         </div>
       </header>
       <AppNav />
 
-      <main className="mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-10 lg:px-8 lg:py-12">
+      <main data-pending-dim className="mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-10 lg:px-8 lg:py-12">
         <Link
           href="/"
           className="inline-flex items-center gap-2 text-sm font-medium text-muted transition hover:text-charcoal"
         >
-          <ArrowLeft aria-hidden="true" className="size-4" />
+          <LinkIcon>
+            <ArrowLeft aria-hidden="true" className="size-4" />
+          </LinkIcon>
           Back to day schedule
         </Link>
 

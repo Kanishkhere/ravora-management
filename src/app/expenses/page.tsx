@@ -1,7 +1,7 @@
 import { getAppointmentsForMonth } from "@/actions/appointments";
 import { getExpensesForMonth } from "@/actions/expenses";
-import { logout } from "@/actions/auth";
 import { AppNav } from "@/components/app-nav";
+import { LogoutButton } from "@/components/logout-button";
 import { BrandMark } from "@/components/brand-mark";
 import { ExpenseManager } from "@/components/expense-manager";
 import { MonthFilter } from "@/components/month-filter";
@@ -14,7 +14,7 @@ import {
 import { formatRupees, totalExpenses, totalSales } from "@/lib/finance";
 import type { Appointment } from "@/types/appointment";
 import type { Expense } from "@/types/expense";
-import { LogOut, Receipt, TriangleAlert } from "lucide-react";
+import { Receipt, TriangleAlert } from "lucide-react";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
@@ -58,21 +58,12 @@ export default async function ExpensesPage({ searchParams }: ExpensesPageProps) 
       <header className="border-b border-line/80 bg-paper/75 backdrop-blur">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3 sm:px-6 sm:py-4 lg:px-8">
           <BrandMark priority className="min-w-0" />
-          <form action={logout}>
-            <button
-              type="submit"
-              className="button-secondary size-11 p-0 sm:w-auto sm:px-4"
-              aria-label="Log out"
-            >
-              <LogOut aria-hidden="true" className="size-4" />
-              <span className="hidden sm:inline">Log out</span>
-            </button>
-          </form>
+          <LogoutButton />
         </div>
       </header>
       <AppNav />
 
-      <main className="mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-10 lg:px-8 lg:py-12">
+      <main data-pending-dim className="mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-10 lg:px-8 lg:py-12">
         <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
           <div className="min-w-0">
             <p className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.18em] text-gold-deep">

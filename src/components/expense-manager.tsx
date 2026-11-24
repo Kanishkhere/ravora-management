@@ -7,6 +7,7 @@ import { FormEvent, useEffect, useRef, useState } from "react";
 import { deleteExpense, saveExpense } from "@/actions/expenses";
 import { formatIndiaDate } from "@/lib/format";
 import { formatRupees } from "@/lib/finance";
+import { Spinner } from "./pending";
 import { EXPENSE_CATEGORIES, type Expense } from "@/types/expense";
 
 type ExpenseManagerProps = {
@@ -333,6 +334,7 @@ export function ExpenseManager({ expenses, defaultDate }: ExpenseManagerProps) {
                   className="button-primary"
                   disabled={pending}
                 >
+                  {pending && <Spinner />}
                   {pending ? "Saving…" : editing ? "Save changes" : "Add expense"}
                 </button>
               </div>
@@ -387,6 +389,7 @@ export function ExpenseManager({ expenses, defaultDate }: ExpenseManagerProps) {
                 onClick={confirmDelete}
                 disabled={pending}
               >
+                {pending && <Spinner />}
                 {pending ? "Deleting…" : "Delete"}
               </button>
             </div>

@@ -4,9 +4,11 @@ import { addDays, format, parseISO } from "date-fns";
 import { CalendarDays, ChevronLeft, ChevronRight } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useRef } from "react";
+import { useRef, useTransition } from "react";
 
 import { todayInIndia } from "@/lib/format";
+
+import { LinkIcon, LinkSpinner, NavMarker, Spinner } from "./pending";
 
 type DateNavigationProps = {
   date: string;
@@ -14,6 +16,7 @@ type DateNavigationProps = {
 
 export function DateNavigation({ date }: DateNavigationProps) {
   const router = useRouter();
+  const [isPending, startTransition] = useTransition();
   const inputRef = useRef<HTMLInputElement>(null);
   const current = parseISO(date);
   const previous = format(addDays(current, -1), "yyyy-MM-dd");
@@ -23,7 +26,7 @@ export function DateNavigation({ date }: DateNavigationProps) {
 
   function goToDate(value: string) {
     if (!value || value === date) return;
-    router.push(`/?date=${value}`);
+    startTransition(() => router.push(`/?date=${value}`));
   }
 
   function openDatePicker() {
@@ -44,13 +47,16 @@ export function DateNavigation({ date }: DateNavigationProps) {
       aria-label="Schedule date"
       className="flex w-full flex-col gap-2 sm:w-auto sm:min-w-[18rem]"
     >
+      <NavMarker active={isPending} />
       <div className="flex w-full items-center gap-2">
         <Link
           href={`/?date=${previous}`}
           className="button-secondary size-11 shrink-0 p-0"
           aria-label="Previous day"
         >
-          <ChevronLeft aria-hidden="true" className="size-4" />
+          <LinkIcon>
+            <ChevronLeft aria-hidden="true" className="size-4" />
+          </LinkIcon>
         </Link>
 
         <div className="relative min-w-0 flex-1">
@@ -60,10 +66,14 @@ export function DateNavigation({ date }: DateNavigationProps) {
             className="button-secondary h-11 w-full min-w-0 gap-2 px-3 sm:px-4"
             aria-label={`Jump to date, currently ${formattedDate}`}
           >
-            <CalendarDays
-              aria-hidden="true"
-              className="size-4 shrink-0 text-gold-deep"
-            />
+            {isPending ? (
+              <Spinner className="size-4 shrink-0 text-gold-deep" />
+            ) : (
+              <CalendarDays
+                aria-hidden="true"
+                className="size-4 shrink-0 text-gold-deep"
+              />
+            )}
             <span className="truncate">{formattedDate}</span>
           </button>
           <input
@@ -82,7 +92,9 @@ export function DateNavigation({ date }: DateNavigationProps) {
           className="button-secondary size-11 shrink-0 p-0"
           aria-label="Next day"
         >
-          <ChevronRight aria-hidden="true" className="size-4" />
+          <LinkIcon>
+            <ChevronRight aria-hidden="true" className="size-4" />
+          </LinkIcon>
         </Link>
       </div>
 
@@ -91,6 +103,7 @@ export function DateNavigation({ date }: DateNavigationProps) {
           href={`/?date=${today}`}
           className="button-secondary h-11 w-full justify-center sm:w-auto"
         >
+          <LinkSpinner />
           Today
         </Link>
       )}
