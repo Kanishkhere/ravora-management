@@ -42,6 +42,7 @@ Requirements: Node.js 22 or newer, npm, and a Supabase account.
    - `supabase/migrations/20260908140000_add_payment_modes.sql`
    - `supabase/migrations/20260908150000_remove_appointment_user_binding.sql`
    - `supabase/migrations/20261124120000_create_expenses.sql`
+   - `supabase/migrations/20261125120000_team_incentives.sql`
 3. In Supabase, open **Project settings → API**. Copy `.env.example` to
    `.env.local` and enter the project URL and publishable key:
 
@@ -57,6 +58,22 @@ Requirements: Node.js 22 or newer, npm, and a Supabase account.
    `http://localhost:3000` and add `http://localhost:3000/**` as a redirect URL.
 6. Run `npm run dev`, open [localhost:3000](http://localhost:3000), and sign in
    or sign up at `/signup`.
+
+## Team and incentives
+
+- The **Team** tab holds team members and each person's default incentive
+  percentage (0 means no incentive). Members are deactivated, not deleted, so
+  past appointments keep their names.
+- An appointment records who did the work. One person gets the whole bill; an
+  optional split divides it in rupees and must add up to the bill (booking plus
+  pending). The percentage can be changed per appointment without changing the
+  member's default, and incentive can be switched off for an appointment.
+- Marking an appointment done with nobody assigned asks who did the work.
+- Incentive = share of the bill x percentage, earned when the appointment is
+  completed, in the month of the appointment date. It is added to Total
+  expenses and Net on the Expenses tab, with a per-member monthly summary.
+  Salaries are separate manual expenses.
+- Phone numbers use a country-code dropdown and are saved as `+<code><number>`.
 
 ## Database and security
 

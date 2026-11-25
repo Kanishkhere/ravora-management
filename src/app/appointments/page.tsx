@@ -1,10 +1,12 @@
 import { getAllAppointments } from "@/actions/appointments";
+import { getTeamMembers } from "@/actions/team";
 import { AppointmentManager } from "@/components/appointment-manager";
 import { AppNav } from "@/components/app-nav";
 import { LinkIcon } from "@/components/pending";
 import { LogoutButton } from "@/components/logout-button";
 import { BrandMark } from "@/components/brand-mark";
 import type { Appointment } from "@/types/appointment";
+import type { TeamMember } from "@/types/team";
 import { todayInIndia } from "@/lib/format";
 import { ArrowLeft, IndianRupee, List, TriangleAlert } from "lucide-react";
 import type { Metadata } from "next";
@@ -31,9 +33,11 @@ function formatMoney(value: number) {
 
 export default async function AllAppointmentsPage() {
   let appointments: Appointment[] = [];
+  let teamMembers: TeamMember[] = [];
   let loadError = "";
 
   try {
+    teamMembers = await getTeamMembers().catch(() => []);
     const allAppointments = await getAllAppointments();
     appointments = allAppointments.filter((appointment) => !appointment.isCompleted);
   } catch {
@@ -123,6 +127,7 @@ export default async function AllAppointmentsPage() {
               appointments={appointments}
               date={todayInIndia()}
               groupByDate
+              teamMembers={teamMembers}
               allowCreate={false}
             />
           )}

@@ -12,9 +12,14 @@ import {
   todayInIndia,
 } from "@/lib/format";
 import { formatRupees, totalExpenses, totalSales } from "@/lib/finance";
+import {
+  incentiveItems,
+  summarizeIncentives,
+  totalIncentivePaise,
+} from "@/lib/incentives";
 import type { Appointment } from "@/types/appointment";
 import type { Expense } from "@/types/expense";
-import { Receipt, TriangleAlert } from "lucide-react";
+import { Receipt, TriangleAlert, Users } from "lucide-react";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
@@ -46,7 +51,12 @@ export default async function ExpensesPage({ searchParams }: ExpensesPageProps) 
   const expensesError = expensesResult.status === "rejected";
 
   const sales = totalSales(appointments);
-  const spent = totalExpenses(expenses);
+  const manualExpenses = totalExpenses(expenses);
+  // Incentives are earned by completed appointments and count as an expense.
+  const incentives = salesError ? [] : incentiveItems(appointments);
+  const incentiveSummary = summarizeIncentives(incentives);
+  const incentiveTotal = totalIncentivePaise(incentives) / 100;
+  const spent = manualExpenses + incentiveTotal;
   const net = sales - spent;
 
   // New expenses default to today when viewing the current month, otherwise
@@ -105,7 +115,8 @@ export default async function ExpensesPage({ searchParams }: ExpensesPageProps) 
               {expensesError ? "—" : formatRupees(spent)}
             </p>
             <p className="mt-1 text-xs text-muted">
-              {expenses.length} expense{expenses.length === 1 ? "" : "s"}
+              {formatRupees(manualExpenses)} expenses +{" "}
+              {formatRupees(incentiveTotal)} incentives
             </p>
           </div>
           <div className="rounded-2xl border border-line bg-paper/80 p-4">
@@ -123,9 +134,62 @@ export default async function ExpensesPage({ searchParams }: ExpensesPageProps) 
           </div>
         </section>
 
-        <section className="mt-8" aria-labelledby="expenses-heading">
-          <h2 id="expenses-heading" className="sr-only">
-            Expense list
+        <section className="mt-8" aria-labelledby="incentives-heading">
+          <div className="flex flex-wrap items-end justify-between gap-2">
+            <div>
+              <h2
+                id="incentives-heading"
+                className="flex items-center gap-2 font-display text-2xl font-semibold sm:text-3xl"
+              >
+                <Users aria-hidden="true" className="size-5 text-gold" />
+                Team incentives
+              </h2>
+              <p className="mt-1 text-sm text-muted">
+                Earned on completed appointments in {monthLabel}. Use these
+                totals when working out salaries.
+              </p>
+            </div>
+            <p className="font-display text-2xl font-semibold text-gold-deep">
+              {salesError ? "—" : formatRupees(incentiveTotal)}
+            </p>
+          </div>
+
+          {salesError ? null : incentiveSummary.length === 0 ? (
+            <p className="mt-4 rounded-2xl border border-dashed border-line bg-paper/70 px-5 py-6 text-sm text-muted">
+              No incentives earned in {monthLabel}. They appear here once
+              appointments with a team member and incentive are marked done.
+            </p>
+          ) : (
+            <ul className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {incentiveSummary.map((member) => (
+                <li
+                  key={member.teamMemberId}
+                  className="rounded-2xl border border-line bg-paper p-4"
+                >
+                  <p className="font-display text-xl font-semibold leading-tight">
+                    {member.teamMemberName}
+                  </p>
+                  <p className="mt-2 font-display text-3xl font-semibold text-gold-deep">
+                    {formatRupees(member.incentivePaise / 100)}
+                  </p>
+                  <p className="mt-1 text-xs text-muted">
+                    {member.appointments} appointment
+                    {member.appointments === 1 ? "" : "s"} ·{" "}
+                    {formatRupees(member.workPaise / 100)} of work
+                  </p>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+
+        <section className="mt-10" aria-labelledby="expenses-heading">
+          <h2
+            id="expenses-heading"
+            className="mb-4 flex items-center gap-2 font-display text-2xl font-semibold sm:text-3xl"
+          >
+            <Receipt aria-hidden="true" className="size-5 text-gold" />
+            Expenses
           </h2>
 
           {salesError && (
@@ -149,7 +213,11 @@ export default async function ExpensesPage({ searchParams }: ExpensesPageProps) 
               </p>
             </div>
           ) : (
-            <ExpenseManager expenses={expenses} defaultDate={defaultDate} />
+            <ExpenseManager
+              expenses={expenses}
+              incentives={incentives}
+              defaultDate={defaultDate}
+            />
           )}
         </section>
       </main>

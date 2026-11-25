@@ -1,6 +1,6 @@
 "use client";
 
-import { CalendarDays, Receipt } from "lucide-react";
+import { CalendarDays, Receipt, Users } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -9,11 +9,11 @@ import { LinkIcon } from "./pending";
 const tabs = [
   { href: "/", label: "Schedule", icon: CalendarDays },
   { href: "/expenses", label: "Expenses", icon: Receipt },
+  { href: "/team", label: "Team", icon: Users },
 ] as const;
 
 export function AppNav() {
   const pathname = usePathname();
-  const onExpenses = pathname.startsWith("/expenses");
 
   return (
     <nav
@@ -22,7 +22,10 @@ export function AppNav() {
     >
       <div className="mx-auto flex max-w-6xl gap-1 px-4 sm:px-6 lg:px-8">
         {tabs.map(({ href, label, icon: Icon }) => {
-          const active = href === "/expenses" ? onExpenses : !onExpenses;
+          const active =
+            href === "/"
+              ? pathname === "/" || pathname.startsWith("/appointments")
+              : pathname.startsWith(href);
           return (
             <Link
               key={href}

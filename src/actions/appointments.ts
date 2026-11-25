@@ -12,20 +12,24 @@ import {
 import { createClient } from "@/lib/supabase/server";
 import {
   appointmentInputSchema,
+  assignmentInputSchema,
   dateSchema,
   rupeesToPaise,
 } from "@/lib/validation/appointment";
 import { monthKeySchema } from "@/lib/validation/expense";
 import type {
   Appointment,
+  AppointmentAssignment,
   AppointmentConflict,
   AppointmentInput,
+  CompleteWithTeamInput,
   DeleteAppointmentResult,
   PaymentMode,
   SaveAppointmentResult,
   ToggleAppointmentCompleteResult,
 } from "@/types/appointment";
 import type { AppointmentRow, Database } from "@/types/database";
+import { billTotalPaise, checkSplitTotal } from "@/lib/incentives";
 
 type AppointmentInsert =
   Database["public"]["Tables"]["appointments"]["Insert"];
@@ -45,7 +49,24 @@ function toPaymentMode(value: string): PaymentMode {
   return value === "online" ? "online" : "cash";
 }
 
-function toAppointment(row: AppointmentRow): Appointment {
+/** Embedded select so assignments come back with each appointment. */
+const APPOINTMENT_SELECT = "*, appointment_assignments(*)";
+
+type NameMap = Map<string, string>;
+
+function toAppointment(row: AppointmentRow, names: NameMap): Appointment {
+  const assignments: AppointmentAssignment[] = (
+    row.appointment_assignments ?? []
+  )
+    .map((assignment) => ({
+      teamMemberId: assignment.team_member_id,
+      teamMemberName: names.get(assignment.team_member_id) ?? "Team member",
+      amount: assignment.amount_paise / 100,
+      amountPaise: assignment.amount_paise,
+      incentivePercent: Number(assignment.incentive_percent),
+    }))
+    .sort((a, b) => a.teamMemberName.localeCompare(b.teamMemberName));
+
   return {
     id: row.id,
     clientName: row.client_name,
@@ -62,9 +83,46 @@ function toAppointment(row: AppointmentRow): Appointment {
     bookingPaymentMode: toPaymentMode(row.booking_payment_mode),
     pendingPaymentMode: toPaymentMode(row.pending_payment_mode),
     isCompleted: row.is_completed,
+    incentiveEnabled: row.incentive_enabled ?? true,
+    assignments,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
+}
+
+type SupabaseClient = Awaited<ReturnType<typeof createClient>>;
+
+async function teamNames(supabase: SupabaseClient): Promise<NameMap> {
+  const { data } = await supabase.from("team_members").select("id, name");
+  return new Map(
+    ((data ?? []) as { id: string; name: string }[]).map((member) => [
+      member.id,
+      member.name,
+    ]),
+  );
+}
+
+async function toAppointments(
+  supabase: SupabaseClient,
+  rows: unknown,
+): Promise<Appointment[]> {
+  const names = await teamNames(supabase);
+  return (rows as AppointmentRow[]).map((row) => toAppointment(row, names));
+}
+
+async function fetchAppointment(
+  supabase: SupabaseClient,
+  id: string,
+): Promise<Appointment | null> {
+  const { data, error } = await supabase
+    .from("appointments")
+    .select(APPOINTMENT_SELECT)
+    .eq("id", id)
+    .single();
+
+  if (error || !data) return null;
+  const [appointment] = await toAppointments(supabase, [data]);
+  return appointment ?? null;
 }
 
 async function authenticatedClient() {
@@ -92,7 +150,7 @@ export async function getAppointmentsForDate(
 
   const { data, error } = await supabase
     .from("appointments")
-    .select("*")
+    .select(APPOINTMENT_SELECT)
     .eq("appointment_date", parsedDate.data)
     .order("start_time", { ascending: true });
 
@@ -100,7 +158,7 @@ export async function getAppointmentsForDate(
     throw new Error("Unable to load appointments.");
   }
 
-  return (data as AppointmentRow[]).map(toAppointment);
+  return toAppointments(supabase, data);
 }
 
 export async function getAllAppointments(): Promise<Appointment[]> {
@@ -111,7 +169,7 @@ export async function getAllAppointments(): Promise<Appointment[]> {
 
   const { data, error } = await supabase
     .from("appointments")
-    .select("*")
+    .select(APPOINTMENT_SELECT)
     .order("appointment_date", { ascending: true })
     .order("start_time", { ascending: true });
 
@@ -119,7 +177,7 @@ export async function getAllAppointments(): Promise<Appointment[]> {
     throw new Error("Unable to load appointments.");
   }
 
-  return (data as AppointmentRow[]).map(toAppointment);
+  return toAppointments(supabase, data);
 }
 
 export async function getAppointmentsForCurrentMonthInIndia(): Promise<
@@ -152,7 +210,7 @@ async function getAppointmentsBetween(
 
   const { data, error } = await supabase
     .from("appointments")
-    .select("*")
+    .select(APPOINTMENT_SELECT)
     .gte("appointment_date", start)
     .lte("appointment_date", end)
     .order("appointment_date", { ascending: true })
@@ -162,7 +220,7 @@ async function getAppointmentsBetween(
     throw new Error("Unable to load appointments.");
   }
 
-  return (data as AppointmentRow[]).map(toAppointment);
+  return toAppointments(supabase, data);
 }
 
 export async function saveAppointment(
@@ -234,6 +292,7 @@ export async function saveAppointment(
     pending_amount_paise: rupeesToPaise(value.pendingAmount),
     booking_payment_mode: value.bookingPaymentMode,
     pending_payment_mode: value.pendingPaymentMode,
+    incentive_enabled: value.incentiveEnabled,
   };
 
   const mutation = value.id
@@ -251,11 +310,12 @@ export async function saveAppointment(
           pending_amount_paise: record.pending_amount_paise,
           booking_payment_mode: record.booking_payment_mode,
           pending_payment_mode: record.pending_payment_mode,
+          incentive_enabled: record.incentive_enabled,
         })
         .eq("id", value.id)
-        .select("*")
+        .select("id")
         .single()
-    : supabase.from("appointments").insert(record).select("*").single();
+    : supabase.from("appointments").insert(record).select("id").single();
 
   const { data, error } = await mutation;
   if (error || !data) {
@@ -267,9 +327,67 @@ export async function saveAppointment(
     };
   }
 
+  const appointmentId = (data as { id: string }).id;
+  const assignmentError = await replaceAssignments(
+    supabase,
+    appointmentId,
+    value.assignments,
+    record.booking_amount_paise + record.pending_amount_paise,
+  );
+  if (assignmentError) {
+    revalidatePath("/");
+    revalidatePath("/appointments");
+    return {
+      success: false,
+      error: `The appointment was saved, but the team details were not. ${assignmentError}`,
+    };
+  }
+
+  const appointment = await fetchAppointment(supabase, appointmentId);
+  if (!appointment) {
+    return { success: false, error: "Unable to load the saved appointment." };
+  }
+
+  revalidateAppointmentPaths();
+  return { success: true, appointment };
+}
+
+type ValidAssignment = z.infer<typeof assignmentInputSchema>;
+
+function revalidateAppointmentPaths() {
   revalidatePath("/");
   revalidatePath("/appointments");
-  return { success: true, appointment: toAppointment(data as AppointmentRow) };
+  revalidatePath("/expenses");
+}
+
+/**
+ * Replaces an appointment's assignments in one database transaction.
+ * A single person always gets the whole bill, so their share stays
+ * correct even if the booking or pending amount changes.
+ */
+async function replaceAssignments(
+  supabase: SupabaseClient,
+  appointmentId: string,
+  assignments: ValidAssignment[],
+  billPaise: number,
+): Promise<string | null> {
+  const payload = assignments.map((assignment) => ({
+    team_member_id: assignment.teamMemberId,
+    amount_paise:
+      assignments.length === 1 ? billPaise : rupeesToPaise(assignment.amount),
+    incentive_percent: Number(assignment.incentivePercent),
+  }));
+
+  if (payload.some((item) => item.amount_paise <= 0)) {
+    return "The bill must be more than 0 to assign team members.";
+  }
+
+  const { error } = await supabase.rpc("save_appointment_assignments", {
+    p_appointment_id: appointmentId,
+    p_assignments: payload,
+  });
+
+  return error ? "Please try again." : null;
 }
 
 export async function deleteAppointment(
@@ -289,11 +407,15 @@ export async function deleteAppointment(
     return { success: false, error: "Unable to delete the appointment." };
   }
 
-  revalidatePath("/");
-  revalidatePath("/appointments");
+  revalidateAppointmentPaths();
   return { success: true };
 }
 
+/**
+ * Marks done / not done. Completing an appointment that has no team yet
+ * (while team members exist and incentive is on) returns `needsTeam`
+ * so the UI can ask who did the work first.
+ */
 export async function toggleAppointmentComplete(
   id: string,
 ): Promise<ToggleAppointmentCompleteResult> {
@@ -308,7 +430,7 @@ export async function toggleAppointmentComplete(
 
   const { data: existing, error: fetchError } = await supabase
     .from("appointments")
-    .select("is_completed")
+    .select("is_completed, incentive_enabled")
     .eq("id", id)
     .single();
 
@@ -316,21 +438,130 @@ export async function toggleAppointmentComplete(
     return { success: false, error: "Unable to find the appointment." };
   }
 
-  const { data, error } = await supabase
+  if (!existing.is_completed && existing.incentive_enabled) {
+    const [{ count: assignmentCount }, { count: memberCount }] =
+      await Promise.all([
+        supabase
+          .from("appointment_assignments")
+          .select("id", { count: "exact", head: true })
+          .eq("appointment_id", id),
+        supabase
+          .from("team_members")
+          .select("id", { count: "exact", head: true })
+          .eq("is_active", true),
+      ]);
+
+    if (!assignmentCount && memberCount) {
+      return { success: false, needsTeam: true };
+    }
+  }
+
+  const { error } = await supabase
     .from("appointments")
     .update({ is_completed: !existing.is_completed })
-    .eq("id", id)
-    .select("*")
-    .single();
+    .eq("id", id);
 
-  if (error || !data) {
+  if (error) {
     return {
       success: false,
       error: "Unable to update the appointment status.",
     };
   }
 
-  revalidatePath("/");
-  revalidatePath("/appointments");
-  return { success: true, appointment: toAppointment(data as AppointmentRow) };
+  const appointment = await fetchAppointment(supabase, id);
+  if (!appointment) {
+    return { success: false, error: "Unable to load the appointment." };
+  }
+
+  revalidateAppointmentPaths();
+  return { success: true, appointment };
+}
+
+/** Completes an appointment after choosing who did the work (or opting out of incentive). */
+export async function completeAppointmentWithTeam(
+  id: string,
+  input: CompleteWithTeamInput,
+): Promise<ToggleAppointmentCompleteResult> {
+  if (!z.uuid().safeParse(id).success) {
+    return { success: false, error: "Invalid appointment ID." };
+  }
+
+  const assignments = z
+    .array(assignmentInputSchema)
+    .max(10)
+    .safeParse(input.assignments ?? []);
+  if (!assignments.success) {
+    return {
+      success: false,
+      error: "Please check the team members, amounts and percentages.",
+    };
+  }
+
+  const memberIds = assignments.data.map((item) => item.teamMemberId);
+  if (new Set(memberIds).size !== memberIds.length) {
+    return { success: false, error: "Each team member can only be added once." };
+  }
+
+  const { supabase, user } = await authenticatedClient();
+  if (!user) {
+    return { success: false, error: "Authentication required." };
+  }
+
+  const { data: existing, error: fetchError } = await supabase
+    .from("appointments")
+    .select("booking_amount_paise, pending_amount_paise")
+    .eq("id", id)
+    .single();
+
+  if (fetchError || !existing) {
+    return { success: false, error: "Unable to find the appointment." };
+  }
+
+  const billPaise = billTotalPaise({
+    bookingAmountPaise: existing.booking_amount_paise,
+    pendingAmountPaise: existing.pending_amount_paise,
+  });
+
+  if (assignments.data.length > 1) {
+    const splitError = checkSplitTotal(
+      assignments.data.map((item) => rupeesToPaise(item.amount)),
+      billPaise,
+    );
+    if (splitError) return { success: false, error: splitError };
+  }
+
+  if (assignments.data.length > 0) {
+    const assignmentError = await replaceAssignments(
+      supabase,
+      id,
+      assignments.data,
+      billPaise,
+    );
+    if (assignmentError) {
+      return { success: false, error: assignmentError };
+    }
+  }
+
+  const { error } = await supabase
+    .from("appointments")
+    .update({
+      is_completed: true,
+      incentive_enabled: Boolean(input.incentiveEnabled),
+    })
+    .eq("id", id);
+
+  if (error) {
+    return {
+      success: false,
+      error: "Unable to update the appointment status.",
+    };
+  }
+
+  const appointment = await fetchAppointment(supabase, id);
+  if (!appointment) {
+    return { success: false, error: "Unable to load the appointment." };
+  }
+
+  revalidateAppointmentPaths();
+  return { success: true, appointment };
 }

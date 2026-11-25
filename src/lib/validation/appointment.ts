@@ -1,6 +1,7 @@
 import { z } from "zod";
 
-import { normalizeIndiaWhatsAppPhone } from "../whatsapp/confirmation";
+import { checkSplitTotal } from "../incentives";
+import { normalizeWhatsAppPhone } from "../whatsapp/confirmation";
 
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 const TIME_PATTERN = /^([01]\d|2[0-3]):[0-5]\d$/;
@@ -39,6 +40,24 @@ export const moneySchema = z
     "Amount is too large.",
   );
 
+export const percentSchema = z
+  .string()
+  .trim()
+  .regex(
+    /^(?:0|[1-9]\d{0,2})(?:\.\d{1,2})?$/,
+    "Enter a percentage with no more than 2 decimal places.",
+  )
+  .refine((value) => Number(value) <= 100, "Percentage can't be more than 100.");
+
+export const assignmentInputSchema = z.object({
+  teamMemberId: z.uuid("Choose a team member."),
+  amount: moneySchema.refine(
+    (value) => rupeesToPaise(value) > 0,
+    "Amount must be more than 0.",
+  ),
+  incentivePercent: percentSchema,
+});
+
 export const paymentModeSchema = z.enum(["online", "cash"], {
   message: "Choose online or cash.",
 });
@@ -58,8 +77,8 @@ export const appointmentInputSchema = z
       .optional()
       .default("")
       .refine(
-        (value) => !value || normalizeIndiaWhatsAppPhone(value) !== null,
-        "Enter a valid 10-digit Indian mobile number.",
+        (value) => !value || normalizeWhatsAppPhone(value) !== null,
+        "Enter a valid phone number with its country code, e.g. +44 7700 900123.",
       ),
     service: z
       .string()
@@ -79,9 +98,39 @@ export const appointmentInputSchema = z
     pendingAmount: moneySchema,
     bookingPaymentMode: paymentModeSchema,
     pendingPaymentMode: paymentModeSchema,
+    incentiveEnabled: z.boolean().optional().default(true),
+    assignments: z
+      .array(assignmentInputSchema)
+      .max(10, "Add at most 10 team members.")
+      .optional()
+      .default([]),
     forceOverlap: z.boolean().optional().default(false),
   })
   .superRefine((value, context) => {
+    const memberIds = value.assignments.map((item) => item.teamMemberId);
+    if (new Set(memberIds).size !== memberIds.length) {
+      context.addIssue({
+        code: "custom",
+        path: ["assignments"],
+        message: "Each team member can only be added once.",
+      });
+    }
+
+    // One person always gets the whole bill; only real splits must add up.
+    if (value.assignments.length > 1) {
+      const splitError = checkSplitTotal(
+        value.assignments.map((item) => rupeesToPaise(item.amount)),
+        rupeesToPaise(value.bookingAmount) + rupeesToPaise(value.pendingAmount),
+      );
+      if (splitError) {
+        context.addIssue({
+          code: "custom",
+          path: ["assignments"],
+          message: splitError,
+        });
+      }
+    }
+
     if (value.endTime <= value.startTime) {
       context.addIssue({
         code: "custom",

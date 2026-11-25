@@ -49,6 +49,8 @@ describe("appointment interval overlap", () => {
       bookingPaymentMode: "cash",
       pendingPaymentMode: "online",
       isCompleted: false,
+      incentiveEnabled: true,
+      assignments: [],
       createdAt: "2026-09-01T00:00:00Z",
       updatedAt: "2026-09-01T00:00:00Z",
     };

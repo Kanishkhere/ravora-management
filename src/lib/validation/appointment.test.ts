@@ -43,6 +43,70 @@ describe("appointment validation", () => {
     ).toBe(false);
   });
 
+  it("accepts international phone numbers with a country code", () => {
+    for (const phone of ["+44 7700 900123", "+971501234567", "+1 415 555 2671"]) {
+      expect(
+        appointmentInputSchema.safeParse({ ...validInput, phone }).success,
+      ).toBe(true);
+    }
+  });
+
+  it("rejects a foreign number without a country code", () => {
+    expect(
+      appointmentInputSchema.safeParse({ ...validInput, phone: "2079460958" })
+        .success,
+    ).toBe(false);
+  });
+
+  it("accepts one team member for the whole bill, with or without a matching amount", () => {
+    const member = "11111111-1111-4111-8111-111111111111";
+    expect(
+      appointmentInputSchema.safeParse({
+        ...validInput,
+        assignments: [
+          { teamMemberId: member, amount: "750.50", incentivePercent: "10" },
+        ],
+      }).success,
+    ).toBe(true);
+  });
+
+  it("requires a split between members to add up to the bill", () => {
+    const a = "11111111-1111-4111-8111-111111111111";
+    const b = "22222222-2222-4222-8222-222222222222";
+    const split = (first: string, second: string) =>
+      appointmentInputSchema.safeParse({
+        ...validInput,
+        assignments: [
+          { teamMemberId: a, amount: first, incentivePercent: "10" },
+          { teamMemberId: b, amount: second, incentivePercent: "5" },
+        ],
+      }).success;
+
+    expect(split("500.50", "250")).toBe(true);
+    expect(split("500.50", "200")).toBe(false);
+  });
+
+  it("rejects the same member twice and out-of-range percentages", () => {
+    const a = "11111111-1111-4111-8111-111111111111";
+    expect(
+      appointmentInputSchema.safeParse({
+        ...validInput,
+        assignments: [
+          { teamMemberId: a, amount: "500.50", incentivePercent: "10" },
+          { teamMemberId: a, amount: "250", incentivePercent: "10" },
+        ],
+      }).success,
+    ).toBe(false);
+    expect(
+      appointmentInputSchema.safeParse({
+        ...validInput,
+        assignments: [
+          { teamMemberId: a, amount: "750.50", incentivePercent: "101" },
+        ],
+      }).success,
+    ).toBe(false);
+  });
+
   it("rejects an invalid payment mode", () => {
     expect(
       appointmentInputSchema.safeParse({

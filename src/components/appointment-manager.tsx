@@ -2,6 +2,7 @@
 
 import type { Appointment } from "@/types/appointment";
 import {
+  completeAppointmentWithTeam,
   deleteAppointment,
   saveAppointment,
   toggleAppointmentComplete,
@@ -17,13 +18,27 @@ import {
   Phone,
   Trash2,
   TriangleAlert,
+  Users,
   X,
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FormEvent, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { formatIndiaDate } from "@/lib/format";
+import { formatRupees } from "@/lib/finance";
+import { assignmentIncentivePaise } from "@/lib/incentives";
+import type { TeamMember } from "@/types/team";
+import {
+  AssignmentEditor,
+  buildAssignments,
+  emptyTeamState,
+  safePaise,
+  splitProblem,
+  teamStateFromAppointment,
+  type TeamEditorState,
+} from "./assignment-editor";
 import { LinkSpinner, Spinner } from "./pending";
+import { PhoneInput } from "./phone-input";
 import { getAppointmentWhatsAppConfirmationUrl } from "@/lib/whatsapp/confirmation";
 
 type Conflict = {
@@ -39,6 +54,7 @@ type AppointmentManagerProps = {
   date: string;
   groupByDate?: boolean;
   allowCreate?: boolean;
+  teamMembers?: TeamMember[];
 };
 
 function FieldError({
@@ -109,6 +125,7 @@ export function AppointmentManager({
   date,
   groupByDate = false,
   allowCreate = true,
+  teamMembers = [],
 }: AppointmentManagerProps) {
   const router = useRouter();
   const firstFieldRef = useRef<HTMLInputElement>(null);
@@ -123,6 +140,13 @@ export function AppointmentManager({
   const [pendingInput, setPendingInput] = useState<
     Parameters<typeof saveAppointment>[0] | null
   >(null);
+  const [teamState, setTeamState] = useState<TeamEditorState>(emptyTeamState);
+  const [amounts, setAmounts] = useState({ booking: "0", pending: "0" });
+  const [completing, setCompleting] = useState<Appointment | null>(null);
+  const [completeState, setCompleteState] =
+    useState<TeamEditorState>(emptyTeamState);
+  const [completeError, setCompleteError] = useState("");
+  const [completePending, setCompletePending] = useState(false);
   const [createdAppointment, setCreatedAppointment] =
     useState<Appointment | null>(null);
   const ready = useSyncExternalStore(
@@ -139,6 +163,8 @@ export function AppointmentManager({
 
   function openCreate() {
     setEditing(null);
+    setTeamState(emptyTeamState());
+    setAmounts({ booking: "0", pending: "0" });
     setCreatedAppointment(null);
     setError("");
     setFieldErrors({});
@@ -149,6 +175,11 @@ export function AppointmentManager({
 
   function openEdit(appointment: Appointment) {
     setEditing(appointment);
+    setTeamState(teamStateFromAppointment(appointment));
+    setAmounts({
+      booking: String(appointment.bookingAmount),
+      pending: String(appointment.pendingAmount),
+    });
     setCreatedAppointment(null);
     setError("");
     setFieldErrors({});
@@ -237,6 +268,12 @@ export function AppointmentManager({
       return;
     }
 
+    const billPaise = safePaise(amounts.booking) + safePaise(amounts.pending);
+    if (splitProblem(teamState, billPaise)) {
+      setError("Please fix the team split before saving.");
+      return;
+    }
+
     await persist({
       id: editing ? fieldValue(editing, "id") : undefined,
       clientName: String(form.get("clientName")).trim(),
@@ -254,6 +291,8 @@ export function AppointmentManager({
       pendingPaymentMode: String(form.get("pendingPaymentMode")) as
         | "online"
         | "cash",
+      incentiveEnabled: teamState.incentiveEnabled,
+      assignments: buildAssignments(teamState, billPaise),
     });
   }
 
@@ -285,6 +324,11 @@ export function AppointmentManager({
       const result = await toggleAppointmentComplete(id);
       if (result.success) {
         router.refresh();
+      } else if (result.needsTeam) {
+        // Nobody is assigned yet: ask who did the work before completing.
+        setCompleteState({ ...emptyTeamState(), incentiveEnabled: true });
+        setCompleteError("");
+        setCompleting(appointment);
       } else {
         setError(result.error || "We couldn’t update this appointment.");
       }
@@ -292,6 +336,41 @@ export function AppointmentManager({
       setError("We couldn’t update this appointment.");
     } finally {
       setCompletingId(null);
+    }
+  }
+
+  async function finishCompletion(withIncentive: boolean) {
+    if (!completing) return;
+    const billPaise =
+      completing.bookingAmountPaise + completing.pendingAmountPaise;
+    const state = { ...completeState, incentiveEnabled: withIncentive };
+
+    if (splitProblem(state, billPaise)) {
+      setCompleteError("Please fix the team split first.");
+      return;
+    }
+
+    setCompletePending(true);
+    setCompleteError("");
+    try {
+      const result = await completeAppointmentWithTeam(completing.id, {
+        incentiveEnabled: withIncentive,
+        assignments: withIncentive ? buildAssignments(state, billPaise) : [],
+      });
+      if (result.success) {
+        setCompleting(null);
+        router.refresh();
+      } else {
+        setCompleteError(
+          "error" in result && result.error
+            ? result.error
+            : "We couldn’t complete this appointment.",
+        );
+      }
+    } catch {
+      setCompleteError("We couldn’t complete this appointment.");
+    } finally {
+      setCompletePending(false);
     }
   }
 
@@ -380,6 +459,39 @@ export function AppointmentManager({
               </span>
             </span>
           </div>
+          {(appointment.assignments.length > 0 || !appointment.incentiveEnabled) && (
+            <div className="mt-2 flex flex-wrap gap-2">
+              {appointment.assignments.map((assignment) => {
+                const incentive = assignmentIncentivePaise(assignment) / 100;
+                const earned =
+                  isCompleted && appointment.incentiveEnabled && incentive > 0;
+                return (
+                  <span
+                    key={assignment.teamMemberId}
+                    className="flex items-center gap-1.5 rounded-full border border-line bg-paper/80 px-2.5 py-1 text-xs text-muted"
+                  >
+                    <Users aria-hidden="true" className="size-3.5" />
+                    <span className="font-bold text-charcoal/80">
+                      {assignment.teamMemberName}
+                    </span>
+                    {appointment.assignments.length > 1 && (
+                      <span>· {formatRupees(assignment.amount)}</span>
+                    )}
+                    {earned && (
+                      <span className="font-bold text-emerald-800">
+                        · {formatRupees(incentive)} incentive
+                      </span>
+                    )}
+                  </span>
+                );
+              })}
+              {!appointment.incentiveEnabled && (
+                <span className="rounded-full border border-line bg-paper/80 px-2.5 py-1 text-xs text-muted">
+                  No incentive
+                </span>
+              )}
+            </div>
+          )}
           {fieldValue(appointment, "description") && (
             <p
               className={`mt-3 text-sm leading-6 text-muted ${
@@ -682,21 +794,15 @@ export function AppointmentManager({
                   />
                   <FieldError errors={fieldErrors} name="clientName" />
                 </label>
-                <label>
+                <div>
                   <span className="field-label">Phone (optional)</span>
-                  <input
-                    className="field"
-                    name="phone"
-                    type="tel"
+                  <PhoneInput
                     defaultValue={fieldValue(editing, "phone")}
-                    autoComplete="tel"
-                    aria-invalid={Boolean(fieldErrors.phone)}
-                    aria-describedby={
-                      fieldErrors.phone ? "phone-error" : undefined
-                    }
+                    invalid={Boolean(fieldErrors.phone)}
+                    describedBy={fieldErrors.phone ? "phone-error" : undefined}
                   />
                   <FieldError errors={fieldErrors} name="phone" />
-                </label>
+                </div>
               </div>
 
               <label htmlFor="service">
@@ -802,7 +908,13 @@ export function AppointmentManager({
                       min="0"
                       step="0.01"
                       inputMode="decimal"
-                      defaultValue={fieldValue(editing, "bookingAmount", "0")}
+                      value={amounts.booking}
+                      onChange={(event) =>
+                        setAmounts((current) => ({
+                          ...current,
+                          booking: event.target.value,
+                        }))
+                      }
                       required
                       aria-invalid={Boolean(fieldErrors.bookingAmount)}
                       aria-describedby={
@@ -850,7 +962,13 @@ export function AppointmentManager({
                       min="0"
                       step="0.01"
                       inputMode="decimal"
-                      defaultValue={fieldValue(editing, "pendingAmount", "0")}
+                      value={amounts.pending}
+                      onChange={(event) =>
+                        setAmounts((current) => ({
+                          ...current,
+                          pending: event.target.value,
+                        }))
+                      }
                       required
                       aria-invalid={Boolean(fieldErrors.pendingAmount)}
                       aria-describedby={
@@ -888,6 +1006,15 @@ export function AppointmentManager({
                   </label>
                 </div>
               </div>
+
+              <AssignmentEditor
+                idPrefix="appointment"
+                members={teamMembers}
+                state={teamState}
+                onChange={setTeamState}
+                billPaise={safePaise(amounts.booking) + safePaise(amounts.pending)}
+                error={fieldErrors.assignments?.[0]}
+              />
 
               {conflicts.length > 0 && (
                 <div
@@ -967,6 +1094,78 @@ export function AppointmentManager({
               </div>
             </form>
             )}
+          </div>
+        </>
+      )}
+
+      {completing && (
+        <>
+          <div
+            aria-hidden="true"
+            className="fixed inset-0 z-40 bg-charcoal/60 backdrop-blur-[3px]"
+          />
+          <div
+            role="dialog"
+            aria-labelledby="complete-dialog-title"
+            aria-modal="true"
+            className="fixed inset-x-0 bottom-0 z-50 m-0 max-h-[92dvh] w-full overflow-y-auto rounded-t-3xl border border-line bg-paper p-5 text-charcoal shadow-2xl sm:inset-0 sm:m-auto sm:max-h-[calc(100dvh-2rem)] sm:w-[min(36rem,calc(100%-2rem))] sm:rounded-3xl sm:p-7"
+          >
+            <p className="text-xs font-bold uppercase tracking-[0.18em] text-gold-deep">
+              Mark as done
+            </p>
+            <h2
+              id="complete-dialog-title"
+              className="mt-1 font-display text-2xl font-semibold sm:text-3xl"
+            >
+              Who did the work?
+            </h2>
+            <p className="mt-2 text-sm leading-6 text-muted">
+              {completing.clientName} · {completing.service}. Choose who did
+              this appointment so their incentive is recorded.
+            </p>
+            <div className="mt-5">
+              <AssignmentEditor
+                idPrefix="complete"
+                hideIncentiveToggle
+                members={teamMembers}
+                state={completeState}
+                onChange={setCompleteState}
+                billPaise={
+                  completing.bookingAmountPaise + completing.pendingAmountPaise
+                }
+                error={completeError}
+              />
+            </div>
+            <div className="mt-6 flex flex-col-reverse gap-3 border-t border-line pt-5 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                className="button-secondary"
+                onClick={() => setCompleting(null)}
+                disabled={completePending}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="button-secondary"
+                onClick={() => finishCompletion(false)}
+                disabled={completePending}
+              >
+                Complete without incentive
+              </button>
+              <button
+                type="button"
+                className="button-primary"
+                onClick={() => finishCompletion(true)}
+                disabled={
+                  completePending ||
+                  !completeState.rows.some((row) => row.teamMemberId)
+                }
+              >
+                {completePending && <Spinner />}
+                {completePending ? "Completing…" : "Complete"}
+              </button>
+            </div>
           </div>
         </>
       )}

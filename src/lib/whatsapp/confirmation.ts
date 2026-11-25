@@ -19,14 +19,34 @@ function formatRupees(value: number) {
   }).format(value);
 }
 
-export function normalizeIndiaWhatsAppPhone(phone: string): string | null {
-  const digits = phone.replace(/\D/g, "");
+/**
+ * Returns digits-only international number (country code first) for wa.me,
+ * or null when the number is not usable.
+ *
+ * Accepted: "+<country code><number>" or "00<country code><number>" (8-15 digits),
+ * plus bare Indian mobiles (10 digits, or 91 + 10 digits) for older records.
+ */
+export function normalizeWhatsAppPhone(phone: string): string | null {
+  const trimmed = phone.trim();
+  const digits = trimmed.replace(/\D/g, "");
+  const international = trimmed.startsWith("+");
+  const doubleZero = !international && digits.startsWith("00");
 
-  if (digits.length === 10 && /^[6-9]\d{9}$/.test(digits)) {
+  if (international || doubleZero) {
+    const national = doubleZero ? digits.slice(2) : digits;
+    if (!/^[1-9]\d{7,14}$/.test(national)) return null;
+    // Indian numbers are always 91 followed by a 10 digit mobile.
+    if (national.startsWith("91") && !/^91[6-9]\d{9}$/.test(national)) {
+      return null;
+    }
+    return national;
+  }
+
+  if (/^[6-9]\d{9}$/.test(digits)) {
     return `91${digits}`;
   }
 
-  if (digits.length === 12 && digits.startsWith("91") && /^91[6-9]\d{9}$/.test(digits)) {
+  if (/^91[6-9]\d{9}$/.test(digits)) {
     return digits;
   }
 
@@ -58,7 +78,7 @@ export function buildAppointmentConfirmationMessage(appointment: Appointment) {
 export function getAppointmentWhatsAppConfirmationUrl(
   appointment: Appointment,
 ): string | null {
-  const phone = normalizeIndiaWhatsAppPhone(appointment.phone ?? "");
+  const phone = normalizeWhatsAppPhone(appointment.phone ?? "");
   if (!phone) return null;
 
   return buildWhatsAppConfirmationUrl(

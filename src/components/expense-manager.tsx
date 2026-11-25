@@ -1,17 +1,29 @@
 "use client";
 
-import { Edit3, IndianRupee, Plus, Receipt, Trash2, X } from "lucide-react";
+import {
+  Edit3,
+  IndianRupee,
+  Plus,
+  Receipt,
+  Trash2,
+  Users,
+  X,
+} from "lucide-react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FormEvent, useEffect, useRef, useState } from "react";
 
 import { deleteExpense, saveExpense } from "@/actions/expenses";
 import { formatIndiaDate } from "@/lib/format";
 import { formatRupees } from "@/lib/finance";
-import { Spinner } from "./pending";
+import type { IncentiveItem } from "@/lib/incentives";
+import { LinkSpinner, Spinner } from "./pending";
 import { EXPENSE_CATEGORIES, type Expense } from "@/types/expense";
 
 type ExpenseManagerProps = {
   expenses: Expense[];
+  /** Incentives earned this month. Shown as read-only rows (they come from appointments). */
+  incentives?: IncentiveItem[];
   /** Default date for new expenses (YYYY-MM-DD, inside the selected month). */
   defaultDate: string;
 };
@@ -28,7 +40,15 @@ function FieldError({
   return <span className="mt-1.5 block text-xs text-danger">{message}</span>;
 }
 
-export function ExpenseManager({ expenses, defaultDate }: ExpenseManagerProps) {
+type Row =
+  | { kind: "expense"; date: string; key: string; expense: Expense }
+  | { kind: "incentive"; date: string; key: string; item: IncentiveItem };
+
+export function ExpenseManager({
+  expenses,
+  incentives = [],
+  defaultDate,
+}: ExpenseManagerProps) {
   const router = useRouter();
   const firstFieldRef = useRef<HTMLInputElement>(null);
   const [editing, setEditing] = useState<Expense | null>(null);
@@ -80,7 +100,9 @@ export function ExpenseManager({ expenses, defaultDate }: ExpenseManagerProps) {
         return;
       }
       if (result.fieldErrors) setFieldErrors(result.fieldErrors);
-      setError(result.error || "We couldn’t save this expense. Please try again.");
+      setError(
+        result.error || "We couldn’t save this expense. Please try again.",
+      );
     } catch {
       setError("We couldn’t save this expense. Please try again.");
     } finally {
@@ -107,11 +129,83 @@ export function ExpenseManager({ expenses, defaultDate }: ExpenseManagerProps) {
     }
   }
 
-  const categories = editing && !EXPENSE_CATEGORIES.includes(
-    editing.category as (typeof EXPENSE_CATEGORIES)[number],
-  )
-    ? [...EXPENSE_CATEGORIES, editing.category]
-    : EXPENSE_CATEGORIES;
+  function renderExpense(expense: Expense) {
+    return (
+      <article
+        key={expense.id}
+        className="grid gap-3 rounded-2xl border border-line bg-paper p-4 shadow-[0_10px_35px_rgb(70_55_30/4%)] sm:grid-cols-[8rem_minmax(0,1fr)_auto_auto] sm:items-center sm:p-5"
+      >
+        <p className="text-sm font-bold text-gold-deep">
+          {formatIndiaDate(expense.date, {
+            day: "numeric",
+            month: "short",
+            year: "numeric",
+          })}
+        </p>
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+            <h3 className="font-display text-xl font-semibold leading-tight break-words">
+              {expense.description}
+            </h3>
+            <span className="rounded-full bg-gold/10 px-2.5 py-1 text-[0.68rem] font-bold uppercase tracking-wider text-gold-deep">
+              {expense.category}
+            </span>
+            <span className="rounded-full border border-line px-2.5 py-1 text-[0.68rem] font-bold uppercase tracking-wider text-muted">
+              {expense.paymentMode === "online" ? "Online" : "Cash"}
+            </span>
+          </div>
+        </div>
+        <p className="flex items-center gap-1 font-display text-2xl font-semibold">
+          <IndianRupee aria-hidden="true" className="size-4 text-gold" />
+          {formatRupees(expense.amount).replace("₹", "").trim()}
+        </p>
+        <div className="flex items-center justify-end gap-1 border-t border-line pt-3 sm:border-0 sm:pt-0">
+          <button
+            type="button"
+            className="rounded-full p-2.5 text-muted transition hover:bg-cream hover:text-charcoal"
+            onClick={() => openDialog(expense)}
+            aria-label={`Edit expense ${expense.description}`}
+          >
+            <Edit3 aria-hidden="true" className="size-4" />
+          </button>
+          <button
+            type="button"
+            className="rounded-full p-2.5 text-muted transition hover:bg-red-50 hover:text-danger"
+            onClick={() => {
+              setError("");
+              setDeleting(expense);
+            }}
+            aria-label={`Delete expense ${expense.description}`}
+          >
+            <Trash2 aria-hidden="true" className="size-4" />
+          </button>
+        </div>
+      </article>
+    );
+  }
+
+  const rows: Row[] = [
+    ...expenses.map((expense): Row => ({
+      kind: "expense",
+      date: expense.date,
+      key: `expense:${expense.id}`,
+      expense,
+    })),
+    ...incentives.map((item): Row => ({
+      kind: "incentive",
+      date: item.date,
+      key: `incentive:${item.key}`,
+      item,
+    })),
+  ].sort((a, b) => b.date.localeCompare(a.date));
+
+  const categories =
+    editing &&
+    !EXPENSE_CATEGORIES.includes(
+      editing.category as (typeof EXPENSE_CATEGORIES)[number],
+    )
+      ? [...EXPENSE_CATEGORIES, editing.category]
+      : EXPENSE_CATEGORIES;
 
   return (
     <>
@@ -134,7 +228,7 @@ export function ExpenseManager({ expenses, defaultDate }: ExpenseManagerProps) {
       )}
 
       <div className="mt-6 space-y-3">
-        {expenses.length === 0 ? (
+        {rows.length === 0 ? (
           <div className="rounded-3xl border border-dashed border-line bg-paper/70 px-6 py-16 text-center">
             <div className="mx-auto flex size-12 items-center justify-center rounded-full bg-gold/10 text-gold-deep">
               <Receipt aria-hidden="true" className="size-5" />
@@ -143,63 +237,60 @@ export function ExpenseManager({ expenses, defaultDate }: ExpenseManagerProps) {
               No expenses this month
             </h2>
             <p className="mx-auto mt-2 max-w-sm text-sm leading-6 text-muted">
-              Add supplies, rent, or any other spending to see it alongside
-              this month’s sales.
+              Add supplies, rent, or any other spending to see it alongside this
+              month’s sales.
             </p>
           </div>
         ) : (
-          expenses.map((expense) => (
-            <article
-              key={expense.id}
-              className="grid gap-3 rounded-2xl border border-line bg-paper p-4 shadow-[0_10px_35px_rgb(70_55_30/4%)] sm:grid-cols-[8rem_minmax(0,1fr)_auto_auto] sm:items-center sm:p-5"
-            >
-              <p className="text-sm font-bold text-gold-deep">
-                {formatIndiaDate(expense.date, {
-                  day: "numeric",
-                  month: "short",
-                  year: "numeric",
-                })}
-              </p>
-              <div className="min-w-0">
-                <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                  <h3 className="font-display text-xl font-semibold leading-tight break-words">
-                    {expense.description}
-                  </h3>
-                  <span className="rounded-full bg-gold/10 px-2.5 py-1 text-[0.68rem] font-bold uppercase tracking-wider text-gold-deep">
-                    {expense.category}
-                  </span>
-                  <span className="rounded-full border border-line px-2.5 py-1 text-[0.68rem] font-bold uppercase tracking-wider text-muted">
-                    {expense.paymentMode === "online" ? "Online" : "Cash"}
-                  </span>
+          rows.map((row) =>
+            row.kind === "incentive" ? (
+              <article
+                key={row.key}
+                className="grid gap-3 rounded-2xl border border-emerald-200 bg-emerald-50/60 p-4 sm:grid-cols-[8rem_minmax(0,1fr)_auto_auto] sm:items-center sm:p-5"
+              >
+                <p className="text-sm font-bold text-emerald-900">
+                  {formatIndiaDate(row.item.date, {
+                    day: "numeric",
+                    month: "short",
+                    year: "numeric",
+                  })}
+                </p>
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                    <h3 className="font-display text-xl font-semibold leading-tight break-words">
+                      {row.item.teamMemberName} · {row.item.clientName}
+                    </h3>
+                    <span className="flex items-center gap-1 rounded-full bg-emerald-100 px-2.5 py-1 text-[0.68rem] font-bold uppercase tracking-wider text-emerald-900">
+                      <Users aria-hidden="true" className="size-3" />
+                      Incentive · auto
+                    </span>
+                  </div>
+                  <p className="mt-1 text-xs text-muted">
+                    {row.item.service} · {row.item.percent}% of{" "}
+                    {formatRupees(row.item.workPaise / 100)}
+                  </p>
                 </div>
-              </div>
-              <p className="flex items-center gap-1 font-display text-2xl font-semibold">
-                <IndianRupee aria-hidden="true" className="size-4 text-gold" />
-                {formatRupees(expense.amount).replace("₹", "").trim()}
-              </p>
-              <div className="flex items-center justify-end gap-1 border-t border-line pt-3 sm:border-0 sm:pt-0">
-                <button
-                  type="button"
-                  className="rounded-full p-2.5 text-muted transition hover:bg-cream hover:text-charcoal"
-                  onClick={() => openDialog(expense)}
-                  aria-label={`Edit expense ${expense.description}`}
+                <p className="flex items-center gap-1 font-display text-2xl font-semibold">
+                  <IndianRupee
+                    aria-hidden="true"
+                    className="size-4 text-emerald-800"
+                  />
+                  {formatRupees(row.item.incentivePaise / 100)
+                    .replace("₹", "")
+                    .trim()}
+                </p>
+                <Link
+                  href={`/?date=${row.item.date}`}
+                  className="button-secondary h-10 px-4 text-sm"
                 >
-                  <Edit3 aria-hidden="true" className="size-4" />
-                </button>
-                <button
-                  type="button"
-                  className="rounded-full p-2.5 text-muted transition hover:bg-red-50 hover:text-danger"
-                  onClick={() => {
-                    setError("");
-                    setDeleting(expense);
-                  }}
-                  aria-label={`Delete expense ${expense.description}`}
-                >
-                  <Trash2 aria-hidden="true" className="size-4" />
-                </button>
-              </div>
-            </article>
-          ))
+                  <LinkSpinner />
+                  View day
+                </Link>
+              </article>
+            ) : (
+              renderExpense(row.expense)
+            ),
+          )
         )}
       </div>
 
@@ -335,7 +426,11 @@ export function ExpenseManager({ expenses, defaultDate }: ExpenseManagerProps) {
                   disabled={pending}
                 >
                   {pending && <Spinner />}
-                  {pending ? "Saving…" : editing ? "Save changes" : "Add expense"}
+                  {pending
+                    ? "Saving…"
+                    : editing
+                      ? "Save changes"
+                      : "Add expense"}
                 </button>
               </div>
             </form>

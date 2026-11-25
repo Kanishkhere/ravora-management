@@ -2,6 +2,8 @@ import {
   getAppointmentsForCurrentMonthInIndia,
   getAppointmentsForDate,
 } from "@/actions/appointments";
+import { getTeamMembers } from "@/actions/team";
+import type { TeamMember } from "@/types/team";
 import type { Appointment } from "@/types/appointment";
 import { AppointmentManager } from "@/components/appointment-manager";
 import { AppNav } from "@/components/app-nav";
@@ -53,12 +55,14 @@ export default async function Home({ searchParams }: HomeProps) {
 
   let appointments: Appointment[] = [];
   let monthAppointments: Appointment[] = [];
+  let teamMembers: TeamMember[] = [];
   let loadError = "";
 
   try {
-    [appointments, monthAppointments] = await Promise.all([
+    [appointments, monthAppointments, teamMembers] = await Promise.all([
       getAppointmentsForDate(date),
       getAppointmentsForCurrentMonthInIndia(),
+      getTeamMembers().catch(() => [] as TeamMember[]),
     ]);
     appointments.sort((a, b) =>
       String(a.startTime).localeCompare(String(b.startTime)),
@@ -179,7 +183,11 @@ export default async function Home({ searchParams }: HomeProps) {
               <p className="mt-1 text-sm">{loadError}</p>
             </div>
           ) : (
-            <AppointmentManager appointments={appointments} date={date} />
+            <AppointmentManager
+              appointments={appointments}
+              date={date}
+              teamMembers={teamMembers}
+            />
           )}
         </section>
       </main>

@@ -18,8 +18,28 @@ export interface Appointment {
   bookingPaymentMode: PaymentMode;
   pendingPaymentMode: PaymentMode;
   isCompleted: boolean;
+  /** When false, no incentive is paid for this appointment. */
+  incentiveEnabled: boolean;
+  /** Team members who did the work, with their share of the bill. */
+  assignments: AppointmentAssignment[];
   createdAt: string;
   updatedAt: string;
+}
+
+export interface AppointmentAssignment {
+  teamMemberId: string;
+  teamMemberName: string;
+  /** Rupee share of the bill this person worked on. */
+  amount: number;
+  amountPaise: number;
+  /** Percentage used for this appointment (starts from the member's default). */
+  incentivePercent: number;
+}
+
+export interface AssignmentInput {
+  teamMemberId: string;
+  amount: string;
+  incentivePercent: string;
 }
 
 export interface AppointmentInput {
@@ -35,6 +55,8 @@ export interface AppointmentInput {
   pendingAmount: string;
   bookingPaymentMode: PaymentMode;
   pendingPaymentMode: PaymentMode;
+  incentiveEnabled?: boolean;
+  assignments?: AssignmentInput[];
   forceOverlap?: boolean;
 }
 
@@ -61,4 +83,11 @@ export type DeleteAppointmentResult =
 
 export type ToggleAppointmentCompleteResult =
   | { success: true; appointment: Appointment }
-  | { success: false; error: string };
+  /** Completing needs the team (and split) to be chosen first. */
+  | { success: false; needsTeam: true }
+  | { success: false; needsTeam?: false; error: string };
+
+export interface CompleteWithTeamInput {
+  incentiveEnabled: boolean;
+  assignments: AssignmentInput[];
+}

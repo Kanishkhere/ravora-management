@@ -6,7 +6,7 @@ import {
   buildAppointmentConfirmationMessage,
   buildWhatsAppConfirmationUrl,
   getAppointmentWhatsAppConfirmationUrl,
-  normalizeIndiaWhatsAppPhone,
+  normalizeWhatsAppPhone,
 } from "./confirmation";
 
 const sampleAppointment: Appointment = {
@@ -25,11 +25,13 @@ const sampleAppointment: Appointment = {
   bookingPaymentMode: "cash",
   pendingPaymentMode: "cash",
   isCompleted: false,
+  incentiveEnabled: true,
+  assignments: [],
   createdAt: "2026-09-08T10:00:00.000Z",
   updatedAt: "2026-09-08T10:00:00.000Z",
 };
 
-describe("normalizeIndiaWhatsAppPhone", () => {
+describe("normalizeWhatsAppPhone", () => {
   it.each([
     ["9876543210", "919876543210"],
     ["+91 98765 43210", "919876543210"],
@@ -37,8 +39,17 @@ describe("normalizeIndiaWhatsAppPhone", () => {
     ["09876543210", null],
     ["12345", null],
     ["", null],
+    ["+44 7700 900123", "447700900123"],
+    ["+1 (415) 555-2671", "14155552671"],
+    ["+971 50 123 4567", "971501234567"],
+    ["00447700900123", "447700900123"],
+    ["+91 12345 67890", null],
+    ["+91 98765", null],
+    ["+0 123456789", null],
+    ["+1234567", null],
+    ["447700900123", null],
   ])("normalizes %j to %j", (input, expected) => {
-    expect(normalizeIndiaWhatsAppPhone(input)).toBe(expected);
+    expect(normalizeWhatsAppPhone(input)).toBe(expected);
   });
 });
 
